@@ -106,3 +106,5 @@ Tone: hopeful yet sad. Short — every line fits one 256px-wide dialogue box pag
 |---|---|---|---|---|
 | 1 | 2026-07-17 | §5 | Progression curve locked (M2, Combat lane): XP to reach L2–L5 = 10/25/45/70 cumulative; per level +5 maxHP, +2 maxMP, +1 ATK/DEF/SPD; HP/MP refill on level-up. Lives in `src/core/battle/progression.ts`. | Orchestrator |
 | 2 | 2026-07-17 | §7 | Dialogue ID convention split (M2, World lane): engine-referenced Room2 IDs stay `sign-gate`/`npc-gatekeeper`; the four new entries use GDD `dlg-*` IDs. Unify at M4 room split. | Orchestrator |
+| 3 | 2026-07-17 | §5 | M3 lethality tuning (sanctioned M1→M3 task, PLAN §5.2): hero HP 40→42, Heal 15→18, wisp ATK 5→6, revenant ATK 6→5. All four §10 sim gates pass on seeds 1..1000; 2-mob careless winRate 0.54→0.31; leveling gauntlet survival 1.000. | Orchestrator |
+| 4 | 2026-07-17 | §5 | Revenant-cost prose corrected: tuned reality is ~25–30% HP typical, ~50–55% when the revive triggers (the old ~45%/~90% claim conflicted with the median ≥ 20 sim gate at 50% revive). | Orchestrator |

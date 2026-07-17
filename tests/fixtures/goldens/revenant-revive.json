@@ -1,0 +1,136 @@
+{
+  "dataset": "balance-v0",
+  "encounterId": "enc-revenant",
+  "seed": 7,
+  "outcome": "victory",
+  "events": [
+    {
+      "type": "turnStarted",
+      "actor": "hero"
+    },
+    {
+      "type": "damage",
+      "source": "hero",
+      "target": "revenant-0",
+      "amount": 8,
+      "kind": "attack"
+    },
+    {
+      "type": "turnStarted",
+      "actor": "revenant-0"
+    },
+    {
+      "type": "damage",
+      "source": "revenant-0",
+      "target": "hero",
+      "amount": 3,
+      "kind": "attack"
+    },
+    {
+      "type": "roundStarted",
+      "round": 2
+    },
+    {
+      "type": "turnStarted",
+      "actor": "hero"
+    },
+    {
+      "type": "damage",
+      "source": "hero",
+      "target": "revenant-0",
+      "amount": 12,
+      "kind": "attack"
+    },
+    {
+      "type": "turnStarted",
+      "actor": "revenant-0"
+    },
+    {
+      "type": "damage",
+      "source": "revenant-0",
+      "target": "hero",
+      "amount": 6,
+      "kind": "attack"
+    },
+    {
+      "type": "roundStarted",
+      "round": 3
+    },
+    {
+      "type": "turnStarted",
+      "actor": "hero"
+    },
+    {
+      "type": "damage",
+      "source": "hero",
+      "target": "revenant-0",
+      "amount": 10,
+      "kind": "attack"
+    },
+    {
+      "type": "revived",
+      "actor": "revenant-0",
+      "hp": 12
+    },
+    {
+      "type": "turnStarted",
+      "actor": "revenant-0"
+    },
+    {
+      "type": "damage",
+      "source": "revenant-0",
+      "target": "hero",
+      "amount": 5,
+      "kind": "attack"
+    },
+    {
+      "type": "roundStarted",
+      "round": 4
+    },
+    {
+      "type": "turnStarted",
+      "actor": "hero"
+    },
+    {
+      "type": "damage",
+      "source": "hero",
+      "target": "revenant-0",
+      "amount": 9,
+      "kind": "attack"
+    },
+    {
+      "type": "turnStarted",
+      "actor": "revenant-0"
+    },
+    {
+      "type": "damage",
+      "source": "revenant-0",
+      "target": "hero",
+      "amount": 5,
+      "kind": "attack"
+    },
+    {
+      "type": "roundStarted",
+      "round": 5
+    },
+    {
+      "type": "turnStarted",
+      "actor": "hero"
+    },
+    {
+      "type": "damage",
+      "source": "hero",
+      "target": "revenant-0",
+      "amount": 11,
+      "kind": "attack"
+    },
+    {
+      "type": "defeated",
+      "actor": "revenant-0"
+    },
+    {
+      "type": "battleEnded",
+      "outcome": "victory"
+    }
+  ]
+}

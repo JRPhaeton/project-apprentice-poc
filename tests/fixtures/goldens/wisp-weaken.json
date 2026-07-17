@@ -1,0 +1,79 @@
+{
+  "dataset": "balance-v0",
+  "encounterId": "enc-wisp",
+  "seed": 6,
+  "outcome": "victory",
+  "events": [
+    {
+      "type": "turnStarted",
+      "actor": "hero"
+    },
+    {
+      "type": "damage",
+      "source": "hero",
+      "target": "wisp-0",
+      "amount": 12,
+      "kind": "attack"
+    },
+    {
+      "type": "turnStarted",
+      "actor": "wisp-0"
+    },
+    {
+      "type": "buffApplied",
+      "target": "hero",
+      "stat": "atk",
+      "pct": -25,
+      "turns": 3
+    },
+    {
+      "type": "roundStarted",
+      "round": 2
+    },
+    {
+      "type": "turnStarted",
+      "actor": "hero"
+    },
+    {
+      "type": "damage",
+      "source": "hero",
+      "target": "wisp-0",
+      "amount": 9,
+      "kind": "attack"
+    },
+    {
+      "type": "turnStarted",
+      "actor": "wisp-0"
+    },
+    {
+      "type": "buffApplied",
+      "target": "hero",
+      "stat": "atk",
+      "pct": -25,
+      "turns": 3
+    },
+    {
+      "type": "roundStarted",
+      "round": 3
+    },
+    {
+      "type": "turnStarted",
+      "actor": "hero"
+    },
+    {
+      "type": "damage",
+      "source": "hero",
+      "target": "wisp-0",
+      "amount": 8,
+      "kind": "attack"
+    },
+    {
+      "type": "defeated",
+      "actor": "wisp-0"
+    },
+    {
+      "type": "battleEnded",
+      "outcome": "victory"
+    }
+  ]
+}

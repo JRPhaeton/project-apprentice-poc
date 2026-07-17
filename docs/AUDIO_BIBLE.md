@@ -1,6 +1,5 @@
 # Audio Bible — Trial of the Apprentice
-
-**STATUS: DRAFT.** Locks at **M3** (PLAN §9): M4 audio generation may not begin against a draft bible; the M3 lock fixes the loop/seam convention below. Budgets and CI checks are PLAN §2/§6 and bind now.
+**STATUS: LOCKED (M3, 2026-07-17).** Per PLAN §9, M4 generation now runs against this locked bible: sprite dimensions (overworld 16 / mob 64 / boss 96), per-animation frame counts, and the loop/seam convention below are fixed. Changes require an orchestrator-approved GDD amendment.
 
 ## 1. Music — 3 tracks
 

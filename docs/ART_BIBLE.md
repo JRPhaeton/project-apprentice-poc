@@ -1,6 +1,5 @@
 # Art Bible — Trial of the Apprentice
-
-**STATUS: DRAFT.** Locks at **M3** (PLAN §9): M4 art generation may not begin against a draft bible. The M3 lock fixes (i) canonical per-logical-group sprite dimensions, (ii) per-animation frame counts, (iii) — audio side, see AUDIO_BIBLE.md. Palette ≤ 16 per sprite already binds now via PLAN §2 / asset-lint (§6). Enforcement lives in CI (`source-asset-lint`), not prose.
+**STATUS: LOCKED (M3, 2026-07-17).** Per PLAN §9, M4 generation now runs against this locked bible: sprite dimensions (overworld 16 / mob 64 / boss 96), per-animation frame counts, and the loop/seam convention below are fixed. Changes require an orchestrator-approved GDD amendment.
 
 ## 1. Grid & Dimensions (from PLAN §2, canonical)
 

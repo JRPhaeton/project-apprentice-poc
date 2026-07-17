@@ -1,0 +1,197 @@
+{
+    "enemies": {
+        "spider": {
+            "id": "spider",
+            "name": "Vale Spider",
+            "hp": 28,
+            "atk": 7,
+            "def": 5,
+            "spd": 5,
+            "xp": 8,
+            "artId": "enemy.spider",
+            "ai": {
+                "kind": "telegraph",
+                "tellEvery": 3,
+                "tellDamageMult": 2
+            }
+        },
+        "wisp": {
+            "id": "wisp",
+            "name": "Marsh Wisp",
+            "hp": 22,
+            "atk": 6,
+            "def": 4,
+            "spd": 7,
+            "xp": 7,
+            "artId": "enemy.wisp",
+            "ai": {
+                "kind": "caster",
+                "spellId": "weaken",
+                "chance": 0.3
+            }
+        },
+        "revenant": {
+            "id": "revenant",
+            "name": "Revenant",
+            "hp": 30,
+            "atk": 5,
+            "def": 6,
+            "spd": 3,
+            "xp": 12,
+            "artId": "enemy.revenant",
+            "ai": {
+                "kind": "reviver",
+                "reviveChance": 0.5,
+                "reviveHp": 12
+            }
+        },
+        "chimera": {
+            "id": "chimera",
+            "name": "Cloaked Chimera",
+            "hp": 66,
+            "atk": 7,
+            "def": 5,
+            "spd": 6,
+            "xp": 40,
+            "artId": "enemy.chimera",
+            "ai": {
+                "kind": "boss",
+                "phaseAtPct": 50,
+                "phaseAtkPct": 30,
+                "phaseUnlock": "flameBreath"
+            }
+        }
+    },
+    "spells": {
+        "heal": {
+            "id": "heal",
+            "name": "Heal",
+            "mpCost": 4,
+            "effect": {
+                "kind": "heal",
+                "amount": 18
+            }
+        },
+        "power": {
+            "id": "power",
+            "name": "Power",
+            "mpCost": 3,
+            "effect": {
+                "kind": "buff",
+                "stat": "atk",
+                "pct": 50,
+                "turns": 3
+            }
+        },
+        "weaken": {
+            "id": "weaken",
+            "name": "Weaken",
+            "mpCost": 0,
+            "effect": {
+                "kind": "buff",
+                "stat": "atk",
+                "pct": -25,
+                "turns": 3
+            }
+        },
+        "flameBreath": {
+            "id": "flameBreath",
+            "name": "Flame Breath",
+            "mpCost": 0,
+            "effect": {
+                "kind": "attack",
+                "mult": 1.5
+            }
+        }
+    },
+    "items": {
+        "herb": {
+            "id": "herb",
+            "name": "Herb",
+            "freeAction": false,
+            "effect": {
+                "kind": "heal",
+                "amount": 12
+            }
+        },
+        "powerBottle": {
+            "id": "powerBottle",
+            "name": "Power Bottle",
+            "freeAction": true,
+            "effect": {
+                "kind": "buff",
+                "stat": "atk",
+                "pct": 50,
+                "turns": 3
+            }
+        }
+    },
+    "hero": {
+        "name": "Aden",
+        "hp": 42,
+        "mp": 10,
+        "atk": 8,
+        "def": 5,
+        "spd": 6,
+        "spells": [
+            "heal",
+            "power"
+        ],
+        "inventory": [
+            {
+                "itemId": "herb",
+                "qty": 2
+            },
+            {
+                "itemId": "powerBottle",
+                "qty": 1
+            }
+        ]
+    },
+    "encounters": {
+        "enc-spider": {
+            "id": "enc-spider",
+            "enemies": [
+                "spider"
+            ],
+            "boss": false
+        },
+        "enc-wisp": {
+            "id": "enc-wisp",
+            "enemies": [
+                "wisp"
+            ],
+            "boss": false
+        },
+        "enc-spider-wisp": {
+            "id": "enc-spider-wisp",
+            "enemies": [
+                "spider",
+                "wisp"
+            ],
+            "boss": false
+        },
+        "enc-spider-spider": {
+            "id": "enc-spider-spider",
+            "enemies": [
+                "spider",
+                "spider"
+            ],
+            "boss": false
+        },
+        "enc-revenant": {
+            "id": "enc-revenant",
+            "enemies": [
+                "revenant"
+            ],
+            "boss": false
+        },
+        "enc-boss": {
+            "id": "enc-boss",
+            "enemies": [
+                "chimera"
+            ],
+            "boss": true
+        }
+    }
+}

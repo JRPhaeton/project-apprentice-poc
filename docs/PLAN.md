@@ -115,7 +115,7 @@ The loader reads `frameWidth/Height` and anim defs from the manifest, so the pla
 
 ## 5. Combat Specification v0 (concrete, testable)
 
-These numbers are the starting point M1 locks or amends — they exist so tests can be written now. Balance-tuning changes `src/data/*.json` only. **The §5.3 values are an amended v0 seed: they are chosen so every mob's signature is *reachable* (each mob survives ≥ 2 hero hits so its tell/Weaken/revive turn can fire), but they are not yet *lethality-balanced* — bringing per-encounter lethality (§5.2) into line is an explicit M1→M3 tuning task, and the §10 lethality sim is expected red until that tuning lands.**
+These numbers are the starting point M1 locks or amends — they exist so tests can be written now. Balance-tuning changes `src/data/*.json` only. **Status: the M1→M3 lethality tuning landed at M3 (GDD amendment 3) — every mob's signature stays *reachable* (≥ 2 hero hits to kill) AND all four §10 sim gates pass on seeds 1..1000 with margin. The sim gate is merge-blocking from M3 on.**
 
 ### 5.1 Turn resolution — honest version
 
@@ -133,17 +133,17 @@ The loop to nail: enemy telegraphs → player defends through the hit → counte
 - Run: `clamp(0.5 + (heroSPD − avgEnemySPD) * 0.05, 0.25, 0.95)`; failure = lost turn.
 - Buffs: additive percentage on the base stat, fixed 3-turn duration, same-buff reapplication refreshes duration (no stacking).
 - **Free action:** an item flagged `freeAction` (Power Bottle) applies its effect **without consuming the hero's turn** — the hero still selects one normal Attack/Defend/Magic/Item that turn. At most one free action per turn.
-- **Lethality target (per ENCOUNTER, not per mob):** careless unbuffed play loses a standard **2-mob** encounter, the **boss**, and the no-heal **4–6-encounter gauntlet** in the low single digits of rounds. A **lone mob is winnable careless but always costs meaningful HP**, and **no mob may be one-shot or left un-acted** — every mob must take at least 2 hero hits before dying so its signature turn (Spider bite, Wisp Weaken) can fire. Revenant's cost is variable by design (~45% typical, up to ~90% when its one-time revive triggers). Correct Defend/tell-reading + Power/Heal wins any 1–3 mob encounter and the boss with margin.
+- **Lethality target (per ENCOUNTER, not per mob):** careless unbuffed play loses a standard **2-mob** encounter, the **boss**, and the no-heal **4–6-encounter gauntlet** in the low single digits of rounds. A **lone mob is winnable careless but always costs meaningful HP**, and **no mob may be one-shot or left un-acted** — every mob must take at least 2 hero hits before dying so its signature turn (Spider bite, Wisp Weaken) can fire. Revenant's cost is variable by design (~25–30% typical, ~50–55% when its one-time revive triggers — GDD amendment 4). Correct Defend/tell-reading + Power/Heal wins any 1–3 mob encounter and the boss with margin.
 - **Quantified invariant (encode as the §10 sim, asserted per encounter):** over 1,000 seeded battles per policy, the "always-attack, never defend/heal/buff" policy wins ≤ 5% vs the boss and survives-to-boss ≤ 10% across the gauntlet, while the "defend-on-tell + Power before boss + Heal below 33% HP" policy wins ≥ 95% with median end-HP ≥ 8; single mobs are winnable careless (≥ 90% win, median end-HP ≥ 20). **Tune to this invariant.** The one-time search for numbers that satisfy it is a Combat-lane task editing `src/data/*.json`, not a CI activity — CI only asserts the thresholds.
 
-### 5.3 Roster v0 (amended seed — reachability-tuned, lethality still to be tuned)
+### 5.3 Roster v0 (M3-tuned — reachability and lethality gates both green)
 
 | Unit | HP | MP | ATK | DEF | SPD | Signature behavior |
 |---|---|---|---|---|---|---|
-| Hero | 40 | 10 | 8 | 5 | 6 | Spells: **Heal** (4 MP, +15 HP), **Power** (3 MP, +50% ATK, 3 turns). Items: 2× Herb (+12 HP), 1× Power Bottle (`freeAction`, applies Power without using the turn). |
+| Hero | 42 | 10 | 8 | 5 | 6 | Spells: **Heal** (4 MP, +18 HP), **Power** (3 MP, +50% ATK, 3 turns). Items: 2× Herb (+12 HP), 1× Power Bottle (`freeAction`, applies Power without using the turn). |
 | Spider (mob) | 28 | — | 7 | 5 | 5 | Turn 1: steps forward (tell, no attack). Turn 2: bites for 2× (~14–22). Subsequent turns: normal attacks, re-telling every 3rd turn. |
-| Wisp (mob) | 22 | — | 5 | 4 | 7 | 30% of turns casts **Weaken** (−25% hero ATK, 3 turns) instead of attacking. |
-| Revenant (mob, optional 3rd) | 30 | — | 6 | 6 | 3 | On death, one-time 50% self-revive at 12 HP (~40% HP; visual: reassembles). |
+| Wisp (mob) | 22 | — | 6 | 4 | 7 | 30% of turns casts **Weaken** (−25% hero ATK, 3 turns) instead of attacking. |
+| Revenant (mob, optional 3rd) | 30 | — | 5 | 6 | 3 | On death, one-time 50% self-revive at 12 HP (~40% HP; visual: reassembles). |
 | Cloaked Chimera (boss) | 66 | — | 7 | 5 | 6 | At ≤ 50% HP (33): removes cloak (frame-group switch = `phaseChanged`), ATK +30% (→ ~9), unlocks **Flame Breath** (1.5× dmg, always telegraphed one full turn ahead). |
 
 With these numbers and the §5.2 formula, hero hits land for ~[9,13] on the Spider/boss (DEF 5), ~[10,14] on the Wisp (DEF 4), ~[8,12] on the Revenant (DEF 6) — so the Spider survives ~3 hits (tell+bite fire before death), the Wisp survives its first hit (Weaken can proc), the Revenant re-kills over ~2 post-revive hits, and the boss survives ~6 hits (long enough for the ≤50% phase and Flame Breath). These make each signature *reachable*; whether careless multi-mob/boss encounters are *fatal* is the M1→M3 tuning target above.

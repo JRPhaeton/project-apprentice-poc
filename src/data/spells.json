@@ -3,7 +3,7 @@
         "id": "heal",
         "name": "Heal",
         "mpCost": 4,
-        "effect": { "kind": "heal", "amount": 15 }
+        "effect": { "kind": "heal", "amount": 18 }
     },
     "power": {
         "id": "power",

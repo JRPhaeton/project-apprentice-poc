@@ -4,7 +4,7 @@ import { runEnemyPhase } from './driver';
 import { createBattle } from './factory';
 import { policies } from './policies';
 import type { PolicyName } from './policies';
-import { heroStateFromDef } from './progression';
+import { applyVictoryXp, heroStateFromDef } from './progression';
 import { resolveAction } from './resolver';
 import type { ContentDefs } from './resolver';
 import { mulberry32 } from './rng';
@@ -128,20 +128,24 @@ export function runSim(
  * hero hp/mp/inventory pool, no rests. The last encounterId is the boss.
  * One mulberry32(seed) stream carries across a seed's whole gauntlet run.
  *
- * Deliberately excludes victory-XP leveling: the full-heal ding
- * (progression.ts) would act as a rest and mask the attrition PLAN §10
- * measures. Whether the tuned M3 sim levels mid-gauntlet is an M3 call.
+ * The CI-asserted lethality run excludes victory-XP leveling: the full-heal
+ * ding (progression.ts) would act as a rest and mask the attrition PLAN §10
+ * measures. `options.leveling` (M3) additionally models real play — victory
+ * XP per encounter with the level-up full-heal ding — for the informational
+ * "can a real leveling run finish the stage?" check (PLAN DoD).
  */
 export function runGauntletSim(
     policyName: PolicyName,
     encounterIds: string[],
     seeds: number[],
     defs: SimDefs,
-    heroDef: HeroDef
+    heroDef: HeroDef,
+    options?: { leveling?: boolean }
 ): GauntletResult {
     let survived = 0;
     let bossReached = 0;
     const bossIndex = encounterIds.length - 1;
+    const leveling = options?.leveling === true;
 
     for (const seed of seeds) {
         const rng = mulberry32(seed);
@@ -165,6 +169,13 @@ export function runGauntletSim(
                 stats: { ...hero.stats, hp: end.hp, mp: end.mp },
                 inventory: state.inventory.filter((s) => s.qty > 0).map((s) => ({ ...s }))
             };
+            if (leveling) {
+                const xp = defs.encounters[encounterIds[i]].enemies.reduce(
+                    (sum, defId) => sum + defs.enemies[defId].xp,
+                    0
+                );
+                hero = applyVictoryXp(hero, xp).hero;
+            }
         }
 
         if (alive) {

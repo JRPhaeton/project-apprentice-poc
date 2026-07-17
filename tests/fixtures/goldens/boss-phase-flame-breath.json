@@ -1,0 +1,242 @@
+{
+  "dataset": "balance-v0",
+  "encounterId": "enc-boss",
+  "seed": 5,
+  "outcome": "victory",
+  "events": [
+    {
+      "type": "turnStarted",
+      "actor": "hero"
+    },
+    {
+      "type": "damage",
+      "source": "hero",
+      "target": "chimera-0",
+      "amount": 12,
+      "kind": "attack"
+    },
+    {
+      "type": "turnStarted",
+      "actor": "chimera-0"
+    },
+    {
+      "type": "damage",
+      "source": "chimera-0",
+      "target": "hero",
+      "amount": 10,
+      "kind": "attack"
+    },
+    {
+      "type": "roundStarted",
+      "round": 2
+    },
+    {
+      "type": "turnStarted",
+      "actor": "hero"
+    },
+    {
+      "type": "damage",
+      "source": "hero",
+      "target": "chimera-0",
+      "amount": 10,
+      "kind": "attack"
+    },
+    {
+      "type": "turnStarted",
+      "actor": "chimera-0"
+    },
+    {
+      "type": "damage",
+      "source": "chimera-0",
+      "target": "hero",
+      "amount": 10,
+      "kind": "attack"
+    },
+    {
+      "type": "roundStarted",
+      "round": 3
+    },
+    {
+      "type": "turnStarted",
+      "actor": "hero"
+    },
+    {
+      "type": "damage",
+      "source": "hero",
+      "target": "chimera-0",
+      "amount": 9,
+      "kind": "attack"
+    },
+    {
+      "type": "turnStarted",
+      "actor": "chimera-0"
+    },
+    {
+      "type": "damage",
+      "source": "chimera-0",
+      "target": "hero",
+      "amount": 9,
+      "kind": "attack"
+    },
+    {
+      "type": "roundStarted",
+      "round": 4
+    },
+    {
+      "type": "turnStarted",
+      "actor": "hero"
+    },
+    {
+      "type": "mpSpent",
+      "actor": "hero",
+      "amount": 4
+    },
+    {
+      "type": "heal",
+      "source": "hero",
+      "target": "hero",
+      "amount": 18
+    },
+    {
+      "type": "turnStarted",
+      "actor": "chimera-0"
+    },
+    {
+      "type": "damage",
+      "source": "chimera-0",
+      "target": "hero",
+      "amount": 10,
+      "kind": "attack"
+    },
+    {
+      "type": "roundStarted",
+      "round": 5
+    },
+    {
+      "type": "turnStarted",
+      "actor": "hero"
+    },
+    {
+      "type": "damage",
+      "source": "hero",
+      "target": "chimera-0",
+      "amount": 11,
+      "kind": "attack"
+    },
+    {
+      "type": "phaseChanged",
+      "actor": "chimera-0",
+      "phase": 1
+    },
+    {
+      "type": "turnStarted",
+      "actor": "chimera-0"
+    },
+    {
+      "type": "damage",
+      "source": "chimera-0",
+      "target": "hero",
+      "amount": 15,
+      "kind": "attack"
+    },
+    {
+      "type": "roundStarted",
+      "round": 6
+    },
+    {
+      "type": "turnStarted",
+      "actor": "hero"
+    },
+    {
+      "type": "mpSpent",
+      "actor": "hero",
+      "amount": 4
+    },
+    {
+      "type": "heal",
+      "source": "hero",
+      "target": "hero",
+      "amount": 18
+    },
+    {
+      "type": "turnStarted",
+      "actor": "chimera-0"
+    },
+    {
+      "type": "damage",
+      "source": "chimera-0",
+      "target": "hero",
+      "amount": 12,
+      "kind": "attack"
+    },
+    {
+      "type": "roundStarted",
+      "round": 7
+    },
+    {
+      "type": "turnStarted",
+      "actor": "hero"
+    },
+    {
+      "type": "damage",
+      "source": "hero",
+      "target": "chimera-0",
+      "amount": 12,
+      "kind": "attack"
+    },
+    {
+      "type": "turnStarted",
+      "actor": "chimera-0"
+    },
+    {
+      "type": "tellStarted",
+      "actor": "chimera-0"
+    },
+    {
+      "type": "roundStarted",
+      "round": 8
+    },
+    {
+      "type": "turnStarted",
+      "actor": "hero"
+    },
+    {
+      "type": "defendStarted",
+      "actor": "hero"
+    },
+    {
+      "type": "turnStarted",
+      "actor": "chimera-0"
+    },
+    {
+      "type": "damage",
+      "source": "chimera-0",
+      "target": "hero",
+      "amount": 11,
+      "kind": "spell"
+    },
+    {
+      "type": "roundStarted",
+      "round": 9
+    },
+    {
+      "type": "turnStarted",
+      "actor": "hero"
+    },
+    {
+      "type": "damage",
+      "source": "hero",
+      "target": "chimera-0",
+      "amount": 18,
+      "kind": "attack"
+    },
+    {
+      "type": "defeated",
+      "actor": "chimera-0"
+    },
+    {
+      "type": "battleEnded",
+      "outcome": "victory"
+    }
+  ]
+}

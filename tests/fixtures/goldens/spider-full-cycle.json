@@ -1,0 +1,76 @@
+{
+  "dataset": "balance-v0",
+  "encounterId": "enc-spider",
+  "seed": 3,
+  "outcome": "victory",
+  "events": [
+    {
+      "type": "turnStarted",
+      "actor": "hero"
+    },
+    {
+      "type": "damage",
+      "source": "hero",
+      "target": "spider-0",
+      "amount": 12,
+      "kind": "attack"
+    },
+    {
+      "type": "turnStarted",
+      "actor": "spider-0"
+    },
+    {
+      "type": "tellStarted",
+      "actor": "spider-0"
+    },
+    {
+      "type": "roundStarted",
+      "round": 2
+    },
+    {
+      "type": "turnStarted",
+      "actor": "hero"
+    },
+    {
+      "type": "damage",
+      "source": "hero",
+      "target": "spider-0",
+      "amount": 9,
+      "kind": "attack"
+    },
+    {
+      "type": "turnStarted",
+      "actor": "spider-0"
+    },
+    {
+      "type": "damage",
+      "source": "spider-0",
+      "target": "hero",
+      "amount": 18,
+      "kind": "attack"
+    },
+    {
+      "type": "roundStarted",
+      "round": 3
+    },
+    {
+      "type": "turnStarted",
+      "actor": "hero"
+    },
+    {
+      "type": "damage",
+      "source": "hero",
+      "target": "spider-0",
+      "amount": 9,
+      "kind": "attack"
+    },
+    {
+      "type": "defeated",
+      "actor": "spider-0"
+    },
+    {
+      "type": "battleEnded",
+      "outcome": "victory"
+    }
+  ]
+}
