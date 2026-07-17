@@ -4,8 +4,17 @@ import { defineConfig } from 'vitest/config';
 // Playwright derives its URLs from this export — never hardcode the base elsewhere.
 export const BASE = '/project-apprentice-poc/';
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
     base: BASE,
+    // §4/§10: `vite build --mode e2e` enables the debug hooks (?scene=,
+    // ?seed=, ?turbo=1) in a production-mode artifact for Playwright. The
+    // Pages deploy build (plain `vite build`) leaves the flag unset, so the
+    // hooks tree-shake out. Dev server keeps them on.
+    define: {
+        'import.meta.env.VITE_ENABLE_DEBUG': JSON.stringify(
+            mode === 'e2e' || mode === 'development' ? '1' : ''
+        )
+    },
     build: {
         rollupOptions: {
             output: {
@@ -26,4 +35,4 @@ export default defineConfig({
     test: {
         include: ['tests/unit/**/*.test.ts']
     }
-});
+}));

@@ -13,8 +13,12 @@ export default defineConfig({
         baseURL: ORIGIN
     },
     webServer: {
-        command: 'npm run preview',
+        // §10: the artifact under test is the --mode e2e build, which enables
+        // the debug hooks via VITE_ENABLE_DEBUG; the Pages deploy build omits
+        // the flag and tree-shakes them out.
+        command: 'npm run build:e2e && npm run preview',
         url: `${ORIGIN}${BASE}`,
-        reuseExistingServer: !process.env.CI
+        reuseExistingServer: !process.env.CI,
+        timeout: 120000
     }
 });
