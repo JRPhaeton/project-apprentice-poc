@@ -12,6 +12,13 @@ export default defineConfig({
     use: {
         baseURL: ORIGIN
     },
+    // §3/§10: Chromium on every merge; Firefox/WebKit weekly
+    // (.github/workflows/weekly-browsers.yml).
+    projects: [
+        { name: 'chromium', use: { browserName: 'chromium' } },
+        { name: 'firefox', use: { browserName: 'firefox' } },
+        { name: 'webkit', use: { browserName: 'webkit' } }
+    ],
     webServer: {
         // §10: the artifact under test is the --mode e2e build, which enables
         // the debug hooks via VITE_ENABLE_DEBUG; the Pages deploy build omits

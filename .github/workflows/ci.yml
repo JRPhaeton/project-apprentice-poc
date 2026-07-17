@@ -173,7 +173,7 @@ jobs:
           echo "dist: ${size} bytes (budget 8388608)"
           test "${size}" -le 8388608
       - run: npx playwright install --with-deps chromium
-      - run: npm run test:e2e
+      - run: npm run test:e2e -- --project=chromium
       # test:e2e's webServer rebuilds dist with --mode e2e (debug hooks
       # enabled); restore the production artifact so Pages never ships the
       # debug build (§4).
@@ -198,3 +198,17 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+      # §10 release gate: the LIVE URL serves index.html and the hashed JS
+      # bundle with correct status + Content-Type after every deploy.
+      - name: live-url release gate
+        run: |
+          url="${{ steps.deployment.outputs.page_url }}"
+          echo "checking ${url}"
+          html_ct="$(curl -fsS -o /tmp/index.html -w '%{content_type}' "${url}")"
+          echo "index.html: ${html_ct}"
+          case "${html_ct}" in text/html*) ;; *) echo 'bad Content-Type'; exit 1;; esac
+          bundle="$(grep -oE 'assets/[A-Za-z0-9._-]+\.js' /tmp/index.html | head -1)"
+          test -n "${bundle}" || { echo 'no JS bundle reference found'; exit 1; }
+          js_ct="$(curl -fsS -o /dev/null -w '%{content_type}' "${url}${bundle}")"
+          echo "${bundle}: ${js_ct}"
+          case "${js_ct}" in *javascript*) ;; *) echo 'bad JS Content-Type'; exit 1;; esac
