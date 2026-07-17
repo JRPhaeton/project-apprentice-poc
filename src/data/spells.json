@@ -1,0 +1,26 @@
+{
+    "heal": {
+        "id": "heal",
+        "name": "Heal",
+        "mpCost": 4,
+        "effect": { "kind": "heal", "amount": 15 }
+    },
+    "power": {
+        "id": "power",
+        "name": "Power",
+        "mpCost": 3,
+        "effect": { "kind": "buff", "stat": "atk", "pct": 50, "turns": 3 }
+    },
+    "weaken": {
+        "id": "weaken",
+        "name": "Weaken",
+        "mpCost": 0,
+        "effect": { "kind": "buff", "stat": "atk", "pct": -25, "turns": 3 }
+    },
+    "flameBreath": {
+        "id": "flameBreath",
+        "name": "Flame Breath",
+        "mpCost": 0,
+        "effect": { "kind": "attack", "mult": 1.5 }
+    }
+}

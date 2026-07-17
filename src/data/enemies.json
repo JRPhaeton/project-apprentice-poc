@@ -1,0 +1,46 @@
+{
+    "spider": {
+        "id": "spider",
+        "name": "Vale Spider",
+        "hp": 28,
+        "atk": 7,
+        "def": 5,
+        "spd": 5,
+        "xp": 8,
+        "artId": "enemy.spider",
+        "ai": { "kind": "telegraph", "tellEvery": 3, "tellDamageMult": 2 }
+    },
+    "wisp": {
+        "id": "wisp",
+        "name": "Marsh Wisp",
+        "hp": 22,
+        "atk": 5,
+        "def": 4,
+        "spd": 7,
+        "xp": 7,
+        "artId": "enemy.wisp",
+        "ai": { "kind": "caster", "spellId": "weaken", "chance": 0.3 }
+    },
+    "revenant": {
+        "id": "revenant",
+        "name": "Revenant",
+        "hp": 30,
+        "atk": 6,
+        "def": 6,
+        "spd": 3,
+        "xp": 12,
+        "artId": "enemy.revenant",
+        "ai": { "kind": "reviver", "reviveChance": 0.5, "reviveHp": 12 }
+    },
+    "chimera": {
+        "id": "chimera",
+        "name": "Cloaked Chimera",
+        "hp": 66,
+        "atk": 7,
+        "def": 5,
+        "spd": 6,
+        "xp": 40,
+        "artId": "enemy.chimera",
+        "ai": { "kind": "boss", "phaseAtPct": 50, "phaseAtkPct": 30, "phaseUnlock": "flameBreath" }
+    }
+}

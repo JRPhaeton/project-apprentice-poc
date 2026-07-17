@@ -1,0 +1,13 @@
+{
+    "v": 1,
+    "hero": {
+        "name": "Aden",
+        "level": 2,
+        "xp": 15,
+        "stats": { "maxHp": 40, "hp": 31, "maxMp": 10, "mp": 6, "atk": 8, "def": 5, "spd": 6 },
+        "spells": ["heal", "power"],
+        "inventory": [{ "itemId": "herb", "qty": 1 }]
+    },
+    "flags": { "metGatekeeper": true },
+    "room": "room2-forest"
+}

@@ -1,0 +1,32 @@
+{
+    "enc-spider": {
+        "id": "enc-spider",
+        "enemies": ["spider"],
+        "boss": false
+    },
+    "enc-wisp": {
+        "id": "enc-wisp",
+        "enemies": ["wisp"],
+        "boss": false
+    },
+    "enc-spider-wisp": {
+        "id": "enc-spider-wisp",
+        "enemies": ["spider", "wisp"],
+        "boss": false
+    },
+    "enc-spider-spider": {
+        "id": "enc-spider-spider",
+        "enemies": ["spider", "spider"],
+        "boss": false
+    },
+    "enc-revenant": {
+        "id": "enc-revenant",
+        "enemies": ["revenant"],
+        "boss": false
+    },
+    "enc-boss": {
+        "id": "enc-boss",
+        "enemies": ["chimera"],
+        "boss": true
+    }
+}

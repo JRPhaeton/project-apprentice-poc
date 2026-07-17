@@ -1,0 +1,45 @@
+{
+    "enemy.spider": {
+        "file": "sprites/spider.png",
+        "frameWidth": 64,
+        "frameHeight": 64,
+        "anims": {
+            "idle": { "frames": [0, 1], "frameRate": 4, "repeat": -1 },
+            "step": { "frames": [2, 3], "frameRate": 8, "repeat": 0 },
+            "bite": { "frames": [4, 5, 6], "frameRate": 12, "repeat": 0 }
+        }
+    },
+    "enemy.wisp": {
+        "file": "sprites/wisp.png",
+        "frameWidth": 64,
+        "frameHeight": 64,
+        "anims": {
+            "idle": { "frames": [0, 1], "frameRate": 4, "repeat": -1 },
+            "cast": { "frames": [2, 3], "frameRate": 8, "repeat": 0 },
+            "attack": { "frames": [4, 5, 6], "frameRate": 12, "repeat": 0 }
+        }
+    },
+    "enemy.revenant": {
+        "file": "sprites/revenant.png",
+        "frameWidth": 64,
+        "frameHeight": 64,
+        "anims": {
+            "idle": { "frames": [0, 1], "frameRate": 4, "repeat": -1 },
+            "reassemble": { "frames": [2, 3], "frameRate": 8, "repeat": 0 },
+            "attack": { "frames": [4, 5, 6], "frameRate": 12, "repeat": 0 }
+        }
+    },
+    "enemy.chimera": {
+        "file": "sprites/chimera.png",
+        "frameWidth": 96,
+        "frameHeight": 96,
+        "anims": {
+            "cloaked.idle": { "frames": [0, 1], "frameRate": 4, "repeat": -1 },
+            "cloaked.attack": { "frames": [2, 3, 4], "frameRate": 12, "repeat": 0 },
+            "uncloaked.idle": { "frames": [5, 6], "frameRate": 4, "repeat": -1 },
+            "uncloaked.attack": { "frames": [7, 8, 9], "frameRate": 12, "repeat": 0 },
+            "uncloaked.tell": { "frames": [10, 11], "frameRate": 8, "repeat": 0 },
+            "uncloaked.breath": { "frames": [12, 13, 14], "frameRate": 12, "repeat": 0 }
+        }
+    }
+}

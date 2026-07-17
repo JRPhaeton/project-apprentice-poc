@@ -1,0 +1,13 @@
+{
+    "sign-gate": {
+        "id": "sign-gate",
+        "lines": ["The vale road is closed.", "Turn back, apprentice."]
+    },
+    "npc-gatekeeper": {
+        "id": "npc-gatekeeper",
+        "lines": [
+            "Another apprentice, off to the ruin...",
+            "Guard your strength. Out there, one careless turn is all it takes."
+        ]
+    }
+}

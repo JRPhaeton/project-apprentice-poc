@@ -1,0 +1,13 @@
+{
+    "name": "Aden",
+    "hp": 40,
+    "mp": 10,
+    "atk": 8,
+    "def": 5,
+    "spd": 6,
+    "spells": ["heal", "power"],
+    "inventory": [
+        { "itemId": "herb", "qty": 2 },
+        { "itemId": "powerBottle", "qty": 1 }
+    ]
+}

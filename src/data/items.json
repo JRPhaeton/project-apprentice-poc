@@ -1,0 +1,14 @@
+{
+    "herb": {
+        "id": "herb",
+        "name": "Herb",
+        "freeAction": false,
+        "effect": { "kind": "heal", "amount": 12 }
+    },
+    "powerBottle": {
+        "id": "powerBottle",
+        "name": "Power Bottle",
+        "freeAction": true,
+        "effect": { "kind": "buff", "stat": "atk", "pct": 50, "turns": 3 }
+    }
+}
