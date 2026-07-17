@@ -1,13 +1,44 @@
 {
     "sign-gate": {
         "id": "sign-gate",
-        "lines": ["The vale road is closed.", "Turn back, apprentice."]
+        "lines": [
+            "The road to the ruin is closed. It has been closed a long time.",
+            "Someone should have taken this sign down by now."
+        ]
     },
     "npc-gatekeeper": {
         "id": "npc-gatekeeper",
         "lines": [
-            "Another apprentice, off to the ruin...",
-            "Guard your strength. Out there, one careless turn is all it takes."
+            "Another apprentice? The others went up that road too, once.",
+            "Go on, then — one of you has to be the one who comes back."
+        ]
+    },
+    "dlg-npc-keeper-2": {
+        "id": "dlg-npc-keeper-2",
+        "lines": [
+            "I keep the gate oiled. Silly, I suppose.",
+            "But a gate should open easily for good news."
+        ]
+    },
+    "dlg-sign-path": {
+        "id": "dlg-sign-path",
+        "lines": [
+            "Mind the webs. The forest keeps what it catches —",
+            "travel light, and be worth less to it."
+        ]
+    },
+    "dlg-sign-marsh": {
+        "id": "dlg-sign-marsh",
+        "lines": [
+            "The marsh lights are not stars. Follow them anyway.",
+            "They end where the road ends."
+        ]
+    },
+    "dlg-sign-door": {
+        "id": "dlg-sign-door",
+        "lines": [
+            "Here waits the last trial.",
+            "Whoever you were before this door, leave it — you will not need it after."
         ]
     }
 }

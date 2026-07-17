@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
 
+import { bootGame } from '../systems/bootstrap';
+
 export class Boot extends Phaser.Scene {
     constructor() {
         super('Boot');
@@ -14,22 +16,15 @@ export class Boot extends Phaser.Scene {
     }
 
     create(): void {
-        this.add
-            .text(128, 104, 'PROJECT APPRENTICE', {
-                fontFamily: 'monospace',
-                fontSize: '16px',
-                color: '#e0e0e0'
-            })
-            .setOrigin(0.5);
-        this.add
-            .text(128, 124, 'M0 walking skeleton', {
-                fontFamily: 'monospace',
-                fontSize: '8px',
-                color: '#808080'
-            })
-            .setOrigin(0.5);
-
-        // E2E readiness signal (§10): Playwright waits for this attribute.
-        document.body.dataset.pocReady = '1';
+        // Content parse (zod, dev only) + registry seed + debug hooks (§4).
+        const { reg, jump } = bootGame(this);
+        if (jump) {
+            // ?scene=battle&enemy=<id>: straight into that battle from boot.
+            reg.set('battleRequest', jump);
+            this.scene.launch('UIOverlay');
+            this.scene.start('Battle');
+            return;
+        }
+        this.scene.start('Preload');
     }
 }

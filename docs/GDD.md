@@ -104,4 +104,5 @@ Tone: hopeful yet sad. Short — every line fits one 256px-wide dialogue box pag
 
 | # | Date | Section | Change | Approved by |
 |---|---|---|---|---|
-| — | — | — | (none) | — |
+| 1 | 2026-07-17 | §5 | Progression curve locked (M2, Combat lane): XP to reach L2–L5 = 10/25/45/70 cumulative; per level +5 maxHP, +2 maxMP, +1 ATK/DEF/SPD; HP/MP refill on level-up. Lives in `src/core/battle/progression.ts`. | Orchestrator |
+| 2 | 2026-07-17 | §7 | Dialogue ID convention split (M2, World lane): engine-referenced Room2 IDs stay `sign-gate`/`npc-gatekeeper`; the four new entries use GDD `dlg-*` IDs. Unify at M4 room split. | Orchestrator |

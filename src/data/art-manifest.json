@@ -1,6 +1,6 @@
 {
     "enemy.spider": {
-        "file": "sprites/spider.png",
+        "file": "assets/sprites/spider.png",
         "frameWidth": 64,
         "frameHeight": 64,
         "anims": {
@@ -10,7 +10,7 @@
         }
     },
     "enemy.wisp": {
-        "file": "sprites/wisp.png",
+        "file": "assets/sprites/wisp.png",
         "frameWidth": 64,
         "frameHeight": 64,
         "anims": {
@@ -20,7 +20,7 @@
         }
     },
     "enemy.revenant": {
-        "file": "sprites/revenant.png",
+        "file": "assets/sprites/revenant.png",
         "frameWidth": 64,
         "frameHeight": 64,
         "anims": {
@@ -30,7 +30,7 @@
         }
     },
     "enemy.chimera": {
-        "file": "sprites/chimera.png",
+        "file": "assets/sprites/chimera.png",
         "frameWidth": 96,
         "frameHeight": 96,
         "anims": {
@@ -40,6 +40,17 @@
             "uncloaked.attack": { "frames": [7, 8, 9], "frameRate": 12, "repeat": 0 },
             "uncloaked.tell": { "frames": [10, 11], "frameRate": 8, "repeat": 0 },
             "uncloaked.breath": { "frames": [12, 13, 14], "frameRate": 12, "repeat": 0 }
+        }
+    },
+    "hero.overworld": {
+        "file": "assets/sprites/hero-overworld.png",
+        "frameWidth": 16,
+        "frameHeight": 16,
+        "anims": {
+            "down": { "frames": [0], "frameRate": 1, "repeat": -1 },
+            "up": { "frames": [1], "frameRate": 1, "repeat": -1 },
+            "left": { "frames": [2], "frameRate": 1, "repeat": -1 },
+            "right": { "frames": [3], "frameRate": 1, "repeat": -1 }
         }
     }
 }

@@ -13,8 +13,10 @@ permissions:
   contents: read
 
 jobs:
-  # §10 CI order (fail-fast): lint · typecheck · unit → build → E2E.
-  # source-asset-lint, balance sim, coverage and size-budget gates join at M1+.
+  # §10 CI order (fail-fast): [parallel] lint · typecheck · source-asset-lint
+  # → unit + coverage gate → build → size-budget → Playwright E2E.
+  # The balance-sim gate joins when the Combat lane lands it (§10; expected
+  # red until the M1→M3 lethality tuning per §5.2).
   quality:
     runs-on: ubuntu-latest
     steps:
@@ -26,10 +28,89 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
-      - run: npm test
+      # §10 unit + coverage gate on the combat core — CLI flags only, so
+      # vite.config.ts stays untouched. May legitimately fail until the
+      # Combat lane's unit tests land (author-time caveat, §10).
+      - run: npx vitest run --coverage.enabled --coverage.include='src/core/battle/**' --coverage.thresholds.lines=90 --coverage.thresholds.functions=85
+
+  # §6/§10 source-asset-lint: pure file checks, pre-build parallel group
+  # (no build, no npm ci needed).
+  source-asset-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: asset source checks
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import struct
+          import sys
+
+          errors = []
+          warnings = []
+
+          # (a) Every PNG under public/assets/ sits on the 16 px grid
+          # (§2/§6): read width/height straight from the IHDR chunk.
+          png_root = 'public/assets'
+          if os.path.isdir(png_root):
+              for dirpath, _dirs, files in os.walk(png_root):
+                  for name in sorted(files):
+                      if not name.lower().endswith('.png'):
+                          continue
+                      path = os.path.join(dirpath, name)
+                      with open(path, 'rb') as fh:
+                          head = fh.read(24)
+                      if len(head) < 24 or head[:8] != b'\x89PNG\r\n\x1a\n':
+                          errors.append(f'{path}: not a valid PNG')
+                          continue
+                      width, height = struct.unpack('>II', head[16:24])
+                      if width % 16 or height % 16:
+                          errors.append(f'{path}: {width}x{height} not divisible by 16')
+          else:
+              print(f'note: {png_root}/ absent - PNG grid check has nothing to lint yet')
+
+          # (b) Every manifest file path resolves under public/ (the
+          # manifest-to-file half of §6 referential integrity). Accept
+          # either public/<path> or public/assets/<path> until the asset
+          # base dir is pinned at integration.
+          def resolves(rel):
+              return any(
+                  os.path.isfile(os.path.join(base, rel))
+                  for base in ('public', 'public/assets')
+              )
+
+          with open('src/data/art-manifest.json') as fh:
+              art = json.load(fh)
+          for key, entry in sorted(art.items()):
+              rel = entry.get('file')
+              if not isinstance(rel, str) or not resolves(rel):
+                  errors.append(f'art-manifest.json {key}: file {rel!r} does not resolve under public/')
+
+          with open('src/data/audio-manifest.json') as fh:
+              audio = json.load(fh)
+          for key, entry in sorted(audio.items()):
+              for codec in ('ogg', 'm4a'):
+                  rel = entry.get(codec)
+                  if not isinstance(rel, str):
+                      errors.append(f'audio-manifest.json {key}: missing {codec} path')
+                  elif not resolves(rel):
+                      # TODO(M4): audio files land in M4 - flip this WARN
+                      # to a hard failure (append to errors) once they exist.
+                      warnings.append(f'audio-manifest.json {key}: {codec} {rel!r} does not resolve under public/ (WARN-only until M4)')
+
+          # (c) Violations fail the job; warnings do not (yet).
+          for message in warnings:
+              print(f'WARNING: {message}')
+          if errors:
+              for message in errors:
+                  print(f'ERROR: {message}', file=sys.stderr)
+              sys.exit(1)
+          print(f'source-asset-lint OK ({len(warnings)} warning(s))')
+          PY
 
   build-e2e:
-    needs: quality
+    needs: [quality, source-asset-lint]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -39,8 +120,22 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+      # §6/§10 size-budget: total shipped dist ≤ 8 MB = 8,388,608 bytes,
+      # measured as real bytes on the production build (both audio codecs
+      # count once they ship).
+      - name: size-budget
+        run: |
+          size="$(du -sb dist | cut -f1)"
+          echo "dist: ${size} bytes (budget 8388608)"
+          test "${size}" -le 8388608
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
+      # test:e2e's webServer rebuilds dist with --mode e2e (debug hooks
+      # enabled); restore the production artifact so Pages never ships the
+      # debug build (§4).
+      - name: rebuild production dist for Pages
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: npm run build
       - uses: actions/upload-pages-artifact@v3
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         with:

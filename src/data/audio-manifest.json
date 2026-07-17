@@ -1,22 +1,22 @@
 {
     "music.overworld": {
-        "ogg": "audio/overworld.ogg",
-        "m4a": "audio/overworld.m4a",
+        "ogg": "assets/audio/overworld.ogg",
+        "m4a": "assets/audio/overworld.m4a",
         "volume": 0.8
     },
     "music.battle": {
-        "ogg": "audio/battle.ogg",
-        "m4a": "audio/battle.m4a",
+        "ogg": "assets/audio/battle.ogg",
+        "m4a": "assets/audio/battle.m4a",
         "volume": 0.8
     },
     "music.boss": {
-        "ogg": "audio/boss.ogg",
-        "m4a": "audio/boss.m4a",
+        "ogg": "assets/audio/boss.ogg",
+        "m4a": "assets/audio/boss.m4a",
         "volume": 0.8
     },
-    "sfx.attack": { "ogg": "audio/sfx-attack.ogg", "m4a": "audio/sfx-attack.m4a", "volume": 1 },
-    "sfx.hit": { "ogg": "audio/sfx-hit.ogg", "m4a": "audio/sfx-hit.m4a", "volume": 1 },
-    "sfx.magic": { "ogg": "audio/sfx-magic.ogg", "m4a": "audio/sfx-magic.m4a", "volume": 1 },
-    "sfx.victory": { "ogg": "audio/sfx-victory.ogg", "m4a": "audio/sfx-victory.m4a", "volume": 0.9 },
-    "sfx.menu": { "ogg": "audio/sfx-menu.ogg", "m4a": "audio/sfx-menu.m4a", "volume": 0.7 }
+    "sfx.attack": { "ogg": "assets/audio/sfx-attack.ogg", "m4a": "assets/audio/sfx-attack.m4a", "volume": 1 },
+    "sfx.hit": { "ogg": "assets/audio/sfx-hit.ogg", "m4a": "assets/audio/sfx-hit.m4a", "volume": 1 },
+    "sfx.magic": { "ogg": "assets/audio/sfx-magic.ogg", "m4a": "assets/audio/sfx-magic.m4a", "volume": 1 },
+    "sfx.victory": { "ogg": "assets/audio/sfx-victory.ogg", "m4a": "assets/audio/sfx-victory.m4a", "volume": 0.9 },
+    "sfx.menu": { "ogg": "assets/audio/sfx-menu.ogg", "m4a": "assets/audio/sfx-menu.m4a", "volume": 0.7 }
 }
