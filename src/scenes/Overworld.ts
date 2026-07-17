@@ -1,10 +1,20 @@
 import Phaser from 'phaser';
 
 import { ensureTexture } from '../systems/anims';
+import { playMusic } from '../systems/audio';
 import { autosave } from '../systems/autosave';
 import { makeBattleRequest } from '../systems/battle-request';
-import { markHp, markScene } from '../systems/hooks';
-import { buildOverworldMap, type EncounterZone, type OverworldMapData } from '../systems/overworld-map';
+import { markHp, markRoom, markScene } from '../systems/hooks';
+import {
+    buildOverworldMap,
+    TILE_SIZE,
+    type BossDoorZone,
+    type EncounterZone,
+    type ExitZone,
+    type OverworldMapData
+} from '../systems/overworld-map';
+import { dur } from '../systems/pacing';
+import { isPaused, PauseController } from '../systems/pause';
 import { getRegistry, type GameRegistry } from '../systems/registry';
 import type { UIOverlay } from './UIOverlay';
 
@@ -18,6 +28,7 @@ export class Overworld extends Phaser.Scene {
     private static pendingZone: string | null = null;
 
     private reg!: GameRegistry;
+    private room!: string;
     private hero!: Phaser.Physics.Arcade.Sprite;
     private mapData!: OverworldMapData;
     private zones: (EncounterZone & { key: string })[] = [];
@@ -40,10 +51,12 @@ export class Overworld extends Phaser.Scene {
     create(): void {
         markScene('Overworld');
         this.reg = getRegistry(this);
+        this.room = this.reg.get('room');
+        markRoom(this.room); // data-poc-room, updated on every room entry (§10)
         this.leaving = false;
         this.consumeBattleResult();
 
-        this.mapData = buildOverworldMap(this);
+        this.mapData = buildOverworldMap(this, this.room);
         const { widthPx, heightPx, spawn } = this.mapData;
 
         ensureTexture(this, HERO_KEY, 16, 16, 0x4060c0);
@@ -63,10 +76,11 @@ export class Overworld extends Phaser.Scene {
 
         // Telegraphed encounters (§8): visible marker per active patrol zone.
         // Keys derive from the UNFILTERED map order so they stay stable across
-        // visits regardless of which patrols are already cleared.
+        // visits regardless of which patrols are already cleared; the room id
+        // scopes them so identical indexes in other rooms never collide.
         const flags = this.reg.get('flags');
         this.zones = this.mapData.encounters
-            .map((z, i) => ({ ...z, key: `cleared.${z.encounterId}#${i}` }))
+            .map((z, i) => ({ ...z, key: `cleared.${this.room}.${z.encounterId}#${i}` }))
             .filter((z) => !flags[z.key]);
         for (const zone of this.zones) {
             this.add
@@ -75,9 +89,20 @@ export class Overworld extends Phaser.Scene {
                 .setDepth(5);
         }
 
+        // Boss door marker (inert once the boss falls — flag 'boss.defeated').
+        if (!flags['boss.defeated']) {
+            for (const door of this.mapData.bossDoors) {
+                this.add
+                    .rectangle(door.rect.centerX, door.rect.centerY, door.rect.width, door.rect.height, 0x503080, 0.35)
+                    .setStrokeStyle(1, 0x9060c0)
+                    .setDepth(5);
+            }
+        }
+
         const cam = this.cameras.main;
         cam.setBounds(0, 0, widthPx, heightPx);
         cam.startFollow(this.hero, true);
+        cam.fadeIn(Math.max(1, dur(150)), 0, 0, 0);
 
         const kb = this.input.keyboard!;
         this.keys = {
@@ -89,17 +114,23 @@ export class Overworld extends Phaser.Scene {
             enter: kb.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER, false),
             z: kb.addKey(Phaser.Input.Keyboard.KeyCodes.Z, false)
         };
+        new PauseController(this); // §8: P freezes tweens/timers/physics
 
         const hero = this.reg.get('hero');
         markHp(hero.stats.hp); // pocHp hook, even if the HUD isn't up yet
         this.ui()?.setHeroHud(hero.stats.hp, hero.stats.maxHp, hero.stats.mp, hero.stats.maxMp);
 
-        // Autosave on Overworld enter (§4/§8).
+        // §6 audio routing: overworld theme, lazy-loaded on first need. A
+        // repeated request for the playing track is a no-op (gapless across
+        // room switches and battle returns).
+        playMusic(this, 'music.overworld');
+
+        // Autosave on Overworld enter (§4/§8) — persists the current room id.
         autosave(this.reg);
     }
 
     update(): void {
-        if (this.leaving || !this.hero.body) {
+        if (isPaused() || this.leaving || !this.hero.body) {
             return;
         }
         const ui = this.ui();
@@ -111,8 +142,21 @@ export class Overworld extends Phaser.Scene {
             return;
         }
         this.move();
+        this.checkExits();
+        if (this.leaving) {
+            return;
+        }
         this.checkEncounters();
-        this.checkSigns(ui);
+        if (this.leaving) {
+            return;
+        }
+        const pressed =
+            Phaser.Input.Keyboard.JustDown(this.keys.enter) || Phaser.Input.Keyboard.JustDown(this.keys.z);
+        if (pressed && ui) {
+            if (!this.checkBossDoors(ui)) {
+                this.checkSigns(ui);
+            }
+        }
     }
 
     private ui(): UIOverlay | null {
@@ -155,6 +199,40 @@ export class Overworld extends Phaser.Scene {
         }
     }
 
+    /** Room exits (lane convention): overlap → fade → arrive at target tile. */
+    private checkExits(): void {
+        for (const exit of this.mapData.exits) {
+            const inside = exit.rect.contains(this.hero.x, this.hero.y);
+            if (!inside) {
+                exit.armed = true;
+                continue;
+            }
+            if (!exit.armed) {
+                continue;
+            }
+            this.switchRoom(exit);
+            return;
+        }
+    }
+
+    private switchRoom(exit: ExitZone): void {
+        this.leaving = true;
+        this.hero.setVelocity(0, 0);
+        this.reg.set('room', exit.targetRoom);
+        // targetX/targetY are TILE coords — arrive centered on that tile.
+        this.reg.set('overworldReturn', {
+            x: exit.targetX * TILE_SIZE + TILE_SIZE / 2,
+            y: exit.targetY * TILE_SIZE + TILE_SIZE / 2
+        });
+        const cam = this.cameras.main;
+        cam.fadeOut(Math.max(1, dur(150)), 0, 0, 0);
+        cam.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+            // create() re-runs for the new room: marks data-poc-room and
+            // autosaves with the new room id.
+            this.scene.restart();
+        });
+    }
+
     /** Fire on the not-inside → inside transition (re-arm prevents fled-loops). */
     private checkEncounters(): void {
         for (const zone of this.zones) {
@@ -172,22 +250,51 @@ export class Overworld extends Phaser.Scene {
             this.leaving = true;
             this.hero.setVelocity(0, 0);
             Overworld.pendingZone = zone.key;
-            this.reg.set('overworldReturn', { x: this.hero.x, y: this.hero.y });
-            this.reg.set(
-                'battleRequest',
-                makeBattleRequest({ encounterId: zone.encounterId, source: 'overworld' })
-            );
-            this.cameras.main.flash(120, 255, 255, 255);
-            this.scene.start('Battle');
+            this.startBattle(zone.encounterId);
         }
     }
 
-    private checkSigns(ui: UIOverlay | null): void {
-        const pressed =
-            Phaser.Input.Keyboard.JustDown(this.keys.enter) || Phaser.Input.Keyboard.JustDown(this.keys.z);
-        if (!pressed || !ui) {
-            return;
+    /**
+     * Boss door (lane convention): overlap + interact → dialogue → on dismiss
+     * the boss battle starts via the shared makeBattleRequest factory. After
+     * a boss victory the 'boss.defeated' flag keeps the door inert.
+     */
+    private checkBossDoors(ui: UIOverlay): boolean {
+        if (this.reg.get('flags')['boss.defeated']) {
+            return false;
         }
+        for (const door of this.mapData.bossDoors) {
+            // 12px reach: the hero's 16px body against a wall-mounted door tile
+            // puts the sprite center a full body-half (8px) + wall clearance
+            // away — 6px left the door geometrically untriggerable (M4 QA).
+            const reach = Phaser.Geom.Rectangle.Inflate(Phaser.Geom.Rectangle.Clone(door.rect), 12, 12);
+            if (!reach.contains(this.hero.x, this.hero.y)) {
+                continue;
+            }
+            this.leaving = true;
+            this.hero.setVelocity(0, 0);
+            const entry = this.reg.get('defs').dialogue[door.dialogueId];
+            void ui.showDialogue(entry?.lines ?? ['...']).then(() => this.enterBossBattle(door));
+            return true;
+        }
+        return false;
+    }
+
+    private enterBossBattle(door: BossDoorZone): void {
+        if (!this.scene.isActive()) {
+            return; // scene was torn down while the dialogue was open
+        }
+        this.startBattle(door.encounterId);
+    }
+
+    private startBattle(encounterId: string): void {
+        this.reg.set('overworldReturn', { x: this.hero.x, y: this.hero.y });
+        this.reg.set('battleRequest', makeBattleRequest({ encounterId, source: 'overworld' }));
+        this.cameras.main.flash(120, 255, 255, 255);
+        this.scene.start('Battle');
+    }
+
+    private checkSigns(ui: UIOverlay): void {
         for (const sign of this.mapData.signs) {
             const reach = Phaser.Geom.Rectangle.Inflate(Phaser.Geom.Rectangle.Clone(sign.rect), 6, 6);
             if (reach.contains(this.hero.x, this.hero.y)) {

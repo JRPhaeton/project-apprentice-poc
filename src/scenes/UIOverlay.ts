@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 
 import { markHp } from '../systems/hooks';
 import { dur } from '../systems/pacing';
+import { isPaused } from '../systems/pause';
 import { savingDisabled } from '../systems/storage';
 
 /**
@@ -137,8 +138,8 @@ export class UIOverlay extends Phaser.Scene {
     }
 
     update(_time: number, delta: number): void {
-        if (!this.onDialogueDone) {
-            return;
+        if (isPaused() || !this.onDialogueDone) {
+            return; // §8: the typewriter freezes with everything else
         }
         const page = this.pages[this.pageIndex];
         const held = this.keys.enter.isDown || this.keys.z.isDown;

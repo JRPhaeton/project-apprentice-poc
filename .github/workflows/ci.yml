@@ -38,6 +38,10 @@ jobs:
   source-asset-lint:
     runs-on: ubuntu-latest
     steps:
+      # ffprobe is NOT guaranteed on ubuntu runners; §6 sanctions this one
+      # extra CI dep for the audio duration gates (cheap for 16 files).
+      - name: install ffmpeg (ffprobe)
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends ffmpeg
       - uses: actions/checkout@v4
       - name: asset source checks
         run: |
@@ -45,10 +49,24 @@ jobs:
           import json
           import os
           import struct
+          import subprocess
           import sys
 
           errors = []
           warnings = []
+
+          def probe_duration(path):
+              """Duration in seconds via ffprobe, or None (recorded as error)."""
+              try:
+                  out = subprocess.run(
+                      ['ffprobe', '-v', 'error', '-show_entries', 'format=duration',
+                       '-of', 'default=noprint_wrappers=1:nokey=1', path],
+                      capture_output=True, text=True, timeout=30
+                  )
+                  return float(out.stdout.strip())
+              except (OSError, subprocess.SubprocessError, ValueError):
+                  errors.append(f'{path}: ffprobe could not read a duration')
+                  return None
 
           # (a) Every PNG under public/assets/ sits on the 16 px grid
           # (§2/§6): read width/height straight from the IHDR chunk.
@@ -74,11 +92,15 @@ jobs:
           # manifest-to-file half of §6 referential integrity). Accept
           # either public/<path> or public/assets/<path> until the asset
           # base dir is pinned at integration.
+          def resolve_path(rel):
+              for base in ('public', 'public/assets'):
+                  candidate = os.path.join(base, rel)
+                  if os.path.isfile(candidate):
+                      return candidate
+              return None
+
           def resolves(rel):
-              return any(
-                  os.path.isfile(os.path.join(base, rel))
-                  for base in ('public', 'public/assets')
-              )
+              return resolve_path(rel) is not None
 
           with open('src/data/art-manifest.json') as fh:
               art = json.load(fh)
@@ -87,6 +109,11 @@ jobs:
               if not isinstance(rel, str) or not resolves(rel):
                   errors.append(f'art-manifest.json {key}: file {rel!r} does not resolve under public/')
 
+          # M4: audio shipped - existence is a hard failure now, and every
+          # file passes the §6 duration gates via ffprobe (music ≤ 60 s,
+          # SFX ≤ 3 s; optional loopStart/loopEnd inside [0, duration)).
+          MUSIC_MAX_S = 60.0
+          SFX_MAX_S = 3.0
           with open('src/data/audio-manifest.json') as fh:
               audio = json.load(fh)
           for key, entry in sorted(audio.items()):
@@ -94,10 +121,27 @@ jobs:
                   rel = entry.get(codec)
                   if not isinstance(rel, str):
                       errors.append(f'audio-manifest.json {key}: missing {codec} path')
-                  elif not resolves(rel):
-                      # TODO(M4): audio files land in M4 - flip this WARN
-                      # to a hard failure (append to errors) once they exist.
-                      warnings.append(f'audio-manifest.json {key}: {codec} {rel!r} does not resolve under public/ (WARN-only until M4)')
+                      continue
+                  path = resolve_path(rel)
+                  if path is None:
+                      errors.append(f'audio-manifest.json {key}: {codec} {rel!r} does not resolve under public/')
+                      continue
+                  duration = probe_duration(path)
+                  if duration is None:
+                      continue
+                  cap = MUSIC_MAX_S if key.startswith('music.') else SFX_MAX_S
+                  if duration > cap:
+                      errors.append(f'{path}: {key} duration {duration:.3f}s exceeds the {cap:.0f}s cap (§6)')
+                  loop_start = entry.get('loopStart')
+                  loop_end = entry.get('loopEnd')
+                  if loop_start is not None or loop_end is not None:
+                      if not (isinstance(loop_start, (int, float)) and isinstance(loop_end, (int, float))):
+                          errors.append(f'audio-manifest.json {key}: loopStart/loopEnd must both be numbers when present')
+                      elif not (0 <= loop_start < loop_end <= duration):
+                          errors.append(
+                              f'{path}: {key} loop points [{loop_start}, {loop_end}] violate '
+                              f'0 <= loopStart < loopEnd <= duration ({duration:.3f}s) (§6)'
+                          )
 
           # (c) Violations fail the job; warnings do not (yet).
           for message in warnings:

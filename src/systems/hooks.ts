@@ -5,6 +5,9 @@
  *   - body[data-poc-scene]        active scene key on every scene switch
  *   - body[data-poc-hp]           current hero hp as string, updated on change
  *   - body[data-poc-outcome]      BattleResult outcome after each battle
+ *   - body[data-poc-room]         current room id, updated on every room switch
+ *   - body[data-poc-music]        music key ONLY while actually audibly playing;
+ *                                 absent when stopped, locked, or files missing
  */
 
 export type SceneHookKey = 'Title' | 'Overworld' | 'Battle' | 'GameOver' | 'Victory';
@@ -23,4 +26,17 @@ export function markHp(hp: number): void {
 
 export function markOutcome(outcome: 'victory' | 'defeat' | 'fled'): void {
     document.body.dataset.pocOutcome = outcome;
+}
+
+export function markRoom(room: string): void {
+    document.body.dataset.pocRoom = room;
+}
+
+/** Set ONLY when a track is really playing (post-unlock, load succeeded). */
+export function markMusic(key: string | null): void {
+    if (key) {
+        document.body.dataset.pocMusic = key;
+    } else {
+        delete document.body.dataset.pocMusic;
+    }
 }

@@ -6,6 +6,7 @@ import { resolveAction, type ContentDefs } from '../core/battle/resolver';
 import type { Action, BattleState, Rng } from '../core/contracts/battle';
 import type { BattleRequest } from '../core/contracts/registry';
 import { queueSheet } from '../systems/anims';
+import { BATTLE_AUDIO_KEYS, ensureAudio, playMusic, playSfx, stopMusic } from '../systems/audio';
 import { autosave } from '../systems/autosave';
 import { animateEvents, createEnemyViews, type BattleView } from '../systems/battle-anim';
 import { MenuList } from '../systems/battle-menu';
@@ -13,6 +14,7 @@ import type { GameDefs } from '../systems/content';
 import { runEnemyPhase } from '../systems/enemy-phase';
 import { markOutcome, markScene } from '../systems/hooks';
 import { dur, toggleSpeed } from '../systems/pacing';
+import { isPaused, PauseController } from '../systems/pause';
 import { getRegistry, type GameRegistry } from '../systems/registry';
 import type { UIOverlay } from './UIOverlay';
 
@@ -53,15 +55,21 @@ export class Battle extends Phaser.Scene {
         this.menu = new MenuList(this, 8, 108, 64);
         this.submenu = new MenuList(this, 76, 108, 116);
         const kb = this.input.keyboard;
-        const onSpeed = (): void => this.ui().toast(`SPEED ${toggleSpeed()}x`);
+        const onSpeed = (): void => {
+            if (!isPaused()) {
+                this.ui().toast(`SPEED ${toggleSpeed()}x`);
+            }
+        };
         kb?.on('keydown-T', onSpeed);
         this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
             kb?.off('keydown-T', onSpeed);
             this.menu.destroy();
             this.submenu.destroy();
         });
+        new PauseController(this); // §8: P freezes tweens/timers/physics
 
-        // §2 lazy-load rule: battle sheets load here, on first Battle entry.
+        // §2 lazy-load rule: battle sheets AND battle/boss music + SFX load
+        // here, on first Battle entry, behind the same loading affordance.
         const artIds = this.defs.encounters[this.request.encounterId].enemies.map(
             (defId) => this.defs.enemies[defId].artId
         );
@@ -69,6 +77,7 @@ export class Battle extends Phaser.Scene {
         for (const artId of artIds) {
             queueSheet(this.load, this.defs.art, artId);
         }
+        ensureAudio(this, BATTLE_AUDIO_KEYS);
         if (this.load.list.size > 0) {
             const loading = this.add
                 .text(128, 112, 'LOADING...', { fontFamily: 'monospace', fontSize: '8px', color: '#808080' })
@@ -90,6 +99,11 @@ export class Battle extends Phaser.Scene {
     }
 
     private begin(): void {
+        // §6 routing: 'music.boss' for boss:true encounters, else 'music.battle'.
+        playMusic(
+            this,
+            this.defs.encounters[this.request.encounterId].boss ? 'music.boss' : 'music.battle'
+        );
         const hero = this.reg.get('hero');
         this.state = createBattle(this.request.encounterId, hero, this.request.seed, {
             enemies: this.defs.enemies,
@@ -247,6 +261,12 @@ export class Battle extends Phaser.Scene {
 
     /** The turn-consuming command: resolve → animate → enemy phase → repeat. */
     private async commit(action: Action): Promise<void> {
+        // §6 SFX mapping: hero attack commit / spell cast.
+        if (action.type === 'attack') {
+            playSfx(this, 'sfx.attack');
+        } else if (action.type === 'cast') {
+            playSfx(this, 'sfx.magic');
+        }
         const { events } = resolveAction(this.state, action, this.rng, this.resolverDefs);
         await animateEvents(this.view, events);
         if (this.checkEnd()) {
@@ -291,6 +311,13 @@ export class Battle extends Phaser.Scene {
                 xpEarned: stats.xpEarned + xp
             });
             this.reg.set('hero', hero);
+            if (this.defs.encounters[this.request.encounterId].boss) {
+                // Boss down: keeps room4's door inert on re-entry (persisted
+                // by the autosave below, so CONTINUE stays inert too).
+                this.reg.set('flags', { ...this.reg.get('flags'), 'boss.defeated': true });
+            }
+            stopMusic(this); // §6: music stops on win; fanfare stands alone
+            playSfx(this, 'sfx.victory');
             this.ui().toast(`+${xp} XP`);
             autosave(this.reg); // autosave on battle victory (§4)
             await new Promise((r) => this.time.delayedCall(Math.max(1, dur(1000)), r));

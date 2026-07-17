@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 
 import type { BattleEvent, BattleState } from '../core/contracts/battle';
 import { ensureTexture, playFirstAnim, registerAnims } from './anims';
+import { playSfx } from './audio';
 import type { GameDefs } from './content';
 import { dur } from './pacing';
 
@@ -121,6 +122,7 @@ function playEvent(view: BattleView, e: BattleEvent): number {
         case 'turnStarted':
             return 0;
         case 'damage': {
+            playSfx(scene, 'sfx.hit'); // §6 SFX mapping: damage event lands
             const src = view.enemies.get(e.source);
             if (src) {
                 playFirstAnim(src.sprite, src.artId, src.prefix, e.kind === 'spell' ? ['breath', 'cast', 'attack', 'bite'] : ['bite', 'attack']);

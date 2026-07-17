@@ -1,10 +1,14 @@
 import Phaser from 'phaser';
 
+import { playSfx } from './audio';
+import { isPaused } from './pause';
+
 /**
  * Keyboard-driven menu list for the Battle scene: arrows + Enter/Z confirm,
  * X/Esc cancel, disabled entries greyed and unselectable. The cursor resets
  * to the FIRST entry on every open() — QA's E2E relies on bare Enter meaning
- * ATTACK at the start of every hero turn.
+ * ATTACK at the start of every hero turn. All handlers are dead while the
+ * game is paused (§8); cursor moves blip sfx.menu (§6 SFX mapping).
  */
 
 export interface MenuItem {
@@ -97,10 +101,18 @@ export class MenuList {
         this.close();
     }
 
-    private readonly onUp = (): void => this.moveCursor(-1);
-    private readonly onDown = (): void => this.moveCursor(1);
+    private readonly onUp = (): void => {
+        if (!isPaused()) {
+            this.moveCursor(-1);
+        }
+    };
+    private readonly onDown = (): void => {
+        if (!isPaused()) {
+            this.moveCursor(1);
+        }
+    };
     private readonly onConfirm = (): void => {
-        if (!this.opts) {
+        if (!this.opts || isPaused()) {
             return;
         }
         const item = this.items[this.index];
@@ -112,7 +124,7 @@ export class MenuList {
         choose(item.value);
     };
     private readonly onCancel = (): void => {
-        if (!this.opts?.onCancel) {
+        if (!this.opts?.onCancel || isPaused()) {
             return;
         }
         const cancel = this.opts.onCancel;
@@ -152,5 +164,8 @@ export class MenuList {
         }
         this.index = (this.index + delta + this.items.length) % this.items.length;
         this.cursor.setY(this.y + PAD + this.index * ROW_H);
+        if (delta !== 0) {
+            playSfx(this.scene, 'sfx.menu'); // cursor MOVE only, not open()
+        }
     }
 }

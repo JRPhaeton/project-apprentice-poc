@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 
+import { stopMusic } from '../systems/audio';
 import { markScene } from '../systems/hooks';
 
 export class GameOver extends Phaser.Scene {
@@ -10,6 +11,7 @@ export class GameOver extends Phaser.Scene {
     create(): void {
         markScene('GameOver');
         this.scene.stop('UIOverlay');
+        stopMusic(this); // §6: GameOver stops music
         this.add.rectangle(128, 112, 256, 224, 0x000000);
         this.add
             .text(128, 96, 'THE VALE CLAIMS ANOTHER', {

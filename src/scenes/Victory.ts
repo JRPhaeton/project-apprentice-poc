@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 
+import { stopMusic } from '../systems/audio';
 import { markScene } from '../systems/hooks';
 import { getRegistry } from '../systems/registry';
 
@@ -12,6 +13,7 @@ export class Victory extends Phaser.Scene {
     create(): void {
         markScene('Victory');
         this.scene.stop('UIOverlay');
+        stopMusic(this); // §6: Victory stops music (fanfare sfx already fired)
         const reg = getRegistry(this);
         const hero = reg.get('hero');
         const stats = reg.get('stats');

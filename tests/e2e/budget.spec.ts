@@ -34,7 +34,7 @@ async function responseBytes(response: Response): Promise<number> {
     }
 }
 
-test('initial load to pocReady stays within the 3 MiB budget', async ({ page }) => {
+test('initial load to pocReady stays within the 3 MiB budget', async ({ page }, testInfo) => {
     const pending: Promise<number>[] = [];
     const onResponse = (response: Response): void => {
         pending.push(responseBytes(response));
@@ -54,5 +54,9 @@ test('initial load to pocReady stays within the 3 MiB budget', async ({ page }) 
     test.skip(!ready, 'app never reached pocReady — initial-load budget not measurable pre-integration');
 
     const total = (await Promise.all(pending)).reduce((sum, bytes) => sum + bytes, 0);
+    // Surface the measurement (M4 added the four map JSONs to Preload; audio
+    // stays lazy) so budget headroom is visible in every run's output.
+    console.log(`initial-load bytes: ${total} (budget ${BUDGET_BYTES})`);
+    testInfo.annotations.push({ type: 'initial-load-bytes', description: String(total) });
     expect(total).toBeLessThanOrEqual(BUDGET_BYTES);
 });

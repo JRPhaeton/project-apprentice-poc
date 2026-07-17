@@ -5,6 +5,8 @@
  *   ?seed=<int>                    battle seed override
  *   ?scene=battle&enemy=<suffix>   jump straight into that battle from boot
  *                                  ('spider' → encounter 'enc-spider')
+ *   ?scene=overworld&room=<id>     boot into that room at its 'spawn' object
+ *                                  (normal bootstrap, fresh hero)
  *   ?turbo=1                       all battle/text tween durations 0
  */
 
@@ -12,11 +14,13 @@ export interface DebugOptions {
     seed: number | null;
     /** Full encounter id to jump into from boot, or null. */
     jumpEncounterId: string | null;
+    /** Room id to boot the Overworld into, or null. */
+    jumpRoomId: string | null;
     turbo: boolean;
 }
 
 export function readDebugOptions(): DebugOptions {
-    const none: DebugOptions = { seed: null, jumpEncounterId: null, turbo: false };
+    const none: DebugOptions = { seed: null, jumpEncounterId: null, jumpRoomId: null, turbo: false };
     if (!import.meta.env.VITE_ENABLE_DEBUG) {
         return none;
     }
@@ -37,5 +41,11 @@ export function readDebugOptions(): DebugOptions {
         jumpEncounterId = `enc-${enemy}`;
     }
 
-    return { seed, jumpEncounterId, turbo: params.get('turbo') === '1' };
+    let jumpRoomId: string | null = null;
+    const room = params.get('room');
+    if (params.get('scene') === 'overworld' && room) {
+        jumpRoomId = room;
+    }
+
+    return { seed, jumpEncounterId, jumpRoomId, turbo: params.get('turbo') === '1' };
 }
