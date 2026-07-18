@@ -75,11 +75,16 @@ export class MenuList {
         this.cursor = addUiText(this.scene, this.x + PAD, this.y + PAD, '>', { color: 0xffff80 })
             .setDepth(51)
             .setScrollFactor(0);
-        // M7 direct tap: one full-width hit zone per row (bigger than the
-        // text); tap = move cursor there + confirm in a single touch.
+        // M7 direct tap: one hit zone per row; tap = move cursor there +
+        // confirm in a single touch. M9: on touch devices the strip spans the
+        // FULL canvas width — a 72px-wide row is an unhittable ~20px target
+        // on a phone, and full-width row strips are the mobile-JRPG standard.
+        const touch = this.scene.sys.game.device.input.touch;
+        const zoneX = touch ? 0 : this.x;
+        const zoneW = touch ? this.scene.scale.width : this.width;
         this.zones = this.items.map((item, i) => {
             const zone = this.scene.add
-                .zone(this.x, this.y + PAD + i * ROW_H - 1, this.width, ROW_H)
+                .zone(zoneX, this.y + PAD + i * ROW_H - 1, zoneW, ROW_H)
                 .setOrigin(0, 0)
                 .setDepth(52)
                 .setScrollFactor(0)
