@@ -9,6 +9,11 @@ const ORIGIN = 'http://localhost:8081';
 
 export default defineConfig({
     testDir: 'tests/e2e',
+    // M11: cap parallelism — the dead-reckoned walk tests are wall-clock
+    // timed, and 4 parallel WebGL browsers on integrated graphics starve
+    // frames enough to shorten held-key walks (flaked at 4, solid at 2 —
+    // matching CI's 2-core default).
+    workers: 2,
     use: {
         baseURL: ORIGIN
     },

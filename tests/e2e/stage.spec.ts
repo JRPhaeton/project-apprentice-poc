@@ -165,11 +165,20 @@ test('boss door: room4 walk + revenant fight + door dialogue starts the boss bat
 
     await enterRoom(page, 'room4-ruin', '&seed=9');
 
-    // East along row 14 to the door/gap column (x 72 → ≈280 at 80 px/s).
+    // East along row 14 to the gap column, then north into the revenant
+    // trigger. Movement is 4-dir exclusive (horizontal wins ties), so no
+    // diagonal slide exists — instead a nudge sweep retries up-attempts with
+    // small eastward corrections, tolerant to minor wall-clock drift.
     await hold(page, 'ArrowRight', 2600);
-
-    // North into the revenant trigger (zone bottom y=160, ≈72 px away).
-    await hold(page, 'ArrowUp', 1200);
+    let inBattle = false;
+    for (let attempt = 0; attempt < 6 && !inBattle; attempt++) {
+        await hold(page, 'ArrowUp', 1300);
+        inBattle = await page.evaluate(() => document.body.dataset.pocScene === 'Battle');
+        if (!inBattle) {
+            await hold(page, 'ArrowDown', 900);
+            await hold(page, 'ArrowRight', 220);
+        }
+    }
     await expect(page.locator('body[data-poc-scene="Battle"]')).toBeAttached({ timeout: 5_000 });
 
     // Attack-only drive; the Enter taps also clear the first-use Defend

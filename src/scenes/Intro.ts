@@ -3,6 +3,7 @@ import Phaser from 'phaser';
 import { queueSheet, registerAnims } from '../systems/anims';
 import { ensureAudio, playMusic, stopMusic } from '../systems/audio';
 import { ensureFxTextures, spawnEmber } from '../systems/fx';
+import { applyGrade, bloom } from '../systems/grade';
 import { markScene } from '../systems/hooks';
 import { dur } from '../systems/pacing';
 import { getRegistry } from '../systems/registry';
@@ -103,10 +104,12 @@ export class Intro extends Phaser.Scene {
         }
         const defs = getRegistry(this).get('defs');
         ensureFxTextures(this);
+        applyGrade(this, 'intro'); // M11: near-mono cold grade
         this.add.rectangle(128, 112, 256, 224, 0x000000).setDepth(0);
 
         // Looming cloaked-Chimera silhouette: the battle sheet's cloaked.idle
         // frames, scaled up and crushed to near-black. Placeholder: a dark mass.
+        let bob = false;
         if (this.textures.exists(BOSS_ART)) {
             registerAnims(this, defs.art, BOSS_ART);
             const silhouette = this.add
@@ -126,12 +129,44 @@ export class Intro extends Phaser.Scene {
                 duration: 2400,
                 ease: 'Sine.easeInOut'
             });
+            bob = true;
         } else {
             this.add.ellipse(128, 96, 110, 132, 0x1a1424, 1).setDepth(2);
         }
 
+        // M11: two smoldering eyes in the silhouette — bloomed, slow pulse,
+        // riding the same 4px bob (same duration/ease, started same tick).
+        const eyes = [118, 138].map((ex) =>
+            this.add.image(ex, 78, 'fx.spark').setScale(0.75).setTint(0xff9030).setDepth(3)
+        );
+        for (const eye of eyes) {
+            bloom(eye, { color: 0xff8030, strength: 2, distance: 4 });
+        }
+        this.tweens.add({
+            targets: eyes,
+            alpha: 0.45,
+            yoyo: true,
+            repeat: -1,
+            duration: 1200,
+            ease: 'Sine.easeInOut'
+        });
+        if (bob) {
+            this.tweens.add({
+                targets: eyes,
+                y: '+=4',
+                yoyo: true,
+                repeat: -1,
+                duration: 2400,
+                ease: 'Sine.easeInOut'
+            });
+        }
+
         for (let i = 0; i < 26; i++) {
-            spawnEmber(this);
+            const mote = spawnEmber(this);
+            if (i < 6) {
+                // M11: a capped few motes carry a real emissive glow.
+                bloom(mote, { color: 0xffa040, strength: 1.8, distance: 4 });
+            }
         }
 
         // Dark non-looping sting (§6 silent-safe); stopped again on exit.

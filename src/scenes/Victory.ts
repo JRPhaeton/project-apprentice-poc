@@ -3,6 +3,7 @@ import Phaser from 'phaser';
 import { registerAnims } from '../systems/anims';
 import { stopMusic } from '../systems/audio';
 import { playEmberBurst } from '../systems/fx';
+import { applyGrade, bloom, lerpGrade } from '../systems/grade';
 import { markScene } from '../systems/hooks';
 import { dur, isTurbo } from '../systems/pacing';
 import { getRegistry } from '../systems/registry';
@@ -51,6 +52,8 @@ export class Victory extends Phaser.Scene {
             if (this.anims.exists(burn)) {
                 heart.play(burn);
             }
+            // M11: the relit Emberheart is THE emissive of this scene.
+            bloom(heart, { color: 0xffa040, strength: 3, distance: 8 });
         }
 
         const texts: UiText[] = [
@@ -81,6 +84,7 @@ export class Victory extends Phaser.Scene {
 
         if (isTurbo()) {
             // Instant final state; exit binds synchronously exactly as pre-M10.
+            applyGrade(this, 'victory-warm'); // M11: land on the warm grade
             bg.setFillStyle(WARM);
             heart?.setAlpha(0.35);
             this.bindExit();
@@ -88,6 +92,9 @@ export class Victory extends Phaser.Scene {
         }
 
         // --- The relight beat (~2s at 1×, dur()-scaled, input-skippable) ---
+        // M11: the whole-frame relight is now a camera grade lerp cold→warm
+        // running alongside the bg tint sweep (Canvas → sweep alone).
+        lerpGrade(this, 'victory-cold', 'victory-warm', 1600);
         for (const t of texts) {
             t.setAlpha(0);
         }
@@ -150,6 +157,7 @@ export class Victory extends Phaser.Scene {
         this.beatDone = true;
         this.sweepTween?.stop(); // its onUpdate must not repaint the warm bg
         this.sweepTween = null;
+        applyGrade(this, 'victory-warm'); // M11: stops the lerp, lands warm
         bg.setFillStyle(WARM);
         if (heart) {
             this.tweens.killTweensOf(heart);

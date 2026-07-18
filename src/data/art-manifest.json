@@ -14,9 +14,9 @@
         "frameWidth": 64,
         "frameHeight": 64,
         "anims": {
-            "idle": { "frames": [0, 1], "frameRate": 4, "repeat": -1 },
-            "cast": { "frames": [2, 3], "frameRate": 8, "repeat": 0 },
-            "attack": { "frames": [4, 5, 6], "frameRate": 12, "repeat": 0 }
+            "idle": { "frames": [0, 1, 2, 3], "frameRate": 8, "repeat": -1 },
+            "cast": { "frames": [4, 5], "frameRate": 8, "repeat": 0 },
+            "attack": { "frames": [6, 7, 8], "frameRate": 12, "repeat": 0 }
         }
     },
     "enemy.revenant": {
@@ -36,10 +36,10 @@
         "anims": {
             "cloaked.idle": { "frames": [0, 1], "frameRate": 4, "repeat": -1 },
             "cloaked.attack": { "frames": [2, 3, 4], "frameRate": 12, "repeat": 0 },
-            "uncloaked.idle": { "frames": [5, 6], "frameRate": 4, "repeat": -1 },
-            "uncloaked.attack": { "frames": [7, 8, 9], "frameRate": 12, "repeat": 0 },
-            "uncloaked.tell": { "frames": [10, 11], "frameRate": 8, "repeat": 0 },
-            "uncloaked.breath": { "frames": [12, 13, 14], "frameRate": 12, "repeat": 0 }
+            "uncloaked.idle": { "frames": [5, 6, 7, 8], "frameRate": 8, "repeat": -1 },
+            "uncloaked.attack": { "frames": [9, 10, 11], "frameRate": 12, "repeat": 0 },
+            "uncloaked.tell": { "frames": [12, 13], "frameRate": 8, "repeat": 0 },
+            "uncloaked.breath": { "frames": [14, 15, 16], "frameRate": 12, "repeat": 0 }
         }
     },
     "hero.overworld": {
@@ -74,7 +74,7 @@
         "frameWidth": 32,
         "frameHeight": 32,
         "anims": {
-            "burn": { "frames": [0, 1], "frameRate": 4, "repeat": -1 }
+            "burn": { "frames": [0, 1, 2, 3], "frameRate": 8, "repeat": -1 }
         }
     },
     "enemy.minis": {
@@ -88,27 +88,87 @@
         }
     },
     "backdrop.forest": {
-        "file": "assets/sprites/backdrops/forest.png",
+        "file": "assets/sprites/backdrops/forest-far.png",
         "frameWidth": 256,
         "frameHeight": 144,
+        "anims": {}
+    },
+    "backdrop.forest.far": {
+        "file": "assets/sprites/backdrops/forest-far.png",
+        "frameWidth": 256,
+        "frameHeight": 144,
+        "anims": {}
+    },
+    "backdrop.forest.near": {
+        "file": "assets/sprites/backdrops/forest-near.png",
+        "frameWidth": 256,
+        "frameHeight": 64,
         "anims": {}
     },
     "backdrop.marsh": {
-        "file": "assets/sprites/backdrops/marsh.png",
+        "file": "assets/sprites/backdrops/marsh-far.png",
         "frameWidth": 256,
         "frameHeight": 144,
+        "anims": {}
+    },
+    "backdrop.marsh.far": {
+        "file": "assets/sprites/backdrops/marsh-far.png",
+        "frameWidth": 256,
+        "frameHeight": 144,
+        "anims": {}
+    },
+    "backdrop.marsh.near": {
+        "file": "assets/sprites/backdrops/marsh-near.png",
+        "frameWidth": 256,
+        "frameHeight": 64,
         "anims": {}
     },
     "backdrop.ruin": {
-        "file": "assets/sprites/backdrops/ruin.png",
+        "file": "assets/sprites/backdrops/ruin-far.png",
         "frameWidth": 256,
         "frameHeight": 144,
         "anims": {}
     },
-    "backdrop.lair": {
-        "file": "assets/sprites/backdrops/lair.png",
+    "backdrop.ruin.far": {
+        "file": "assets/sprites/backdrops/ruin-far.png",
         "frameWidth": 256,
         "frameHeight": 144,
+        "anims": {}
+    },
+    "backdrop.ruin.near": {
+        "file": "assets/sprites/backdrops/ruin-near.png",
+        "frameWidth": 256,
+        "frameHeight": 64,
+        "anims": {}
+    },
+    "backdrop.lair": {
+        "file": "assets/sprites/backdrops/lair-far.png",
+        "frameWidth": 256,
+        "frameHeight": 144,
+        "anims": {}
+    },
+    "backdrop.lair.far": {
+        "file": "assets/sprites/backdrops/lair-far.png",
+        "frameWidth": 256,
+        "frameHeight": 144,
+        "anims": {}
+    },
+    "backdrop.lair.near": {
+        "file": "assets/sprites/backdrops/lair-near.png",
+        "frameWidth": 256,
+        "frameHeight": 64,
+        "anims": {}
+    },
+    "fx.shafts": {
+        "file": "assets/sprites/fx-shafts.png",
+        "frameWidth": 256,
+        "frameHeight": 144,
+        "anims": {}
+    },
+    "fx.fog": {
+        "file": "assets/sprites/fx-fog.png",
+        "frameWidth": 256,
+        "frameHeight": 64,
         "anims": {}
     },
     "ui.panel": {

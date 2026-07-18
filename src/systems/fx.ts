@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
 
-import { dur } from './pacing';
+import type { ArtManifest } from '../core/contracts/data';
+import { bloom, bloomSpike } from './grade';
+import { dur, isTurbo } from './pacing';
 
 /**
  * M6 battle/scene presentation FX (workstream 1): generated overlay textures
@@ -30,6 +32,137 @@ export function backdropKeyFor(room: string | null | undefined, boss: boolean): 
     // Debug jumps with no meaningful room resolve to the START_ROOM default,
     // which maps to forest — the specified fallback.
     return ROOM_BACKDROP[room ?? ''] ?? 'backdrop.forest';
+}
+
+/** Battle biome for a room ('backdrop.<biome>' key tail); boss → lair. */
+export function biomeFor(room: string | null | undefined, boss: boolean): string {
+    return backdropKeyFor(room, boss).replace('backdrop.', '');
+}
+
+export interface BackdropSpec {
+    biome: string;
+    /** M11 parallax far layer ('backdrop.<biome>.far'), else the M6 single key. */
+    farKey: string;
+    /** Near parallax band, when the manifest ships one. */
+    nearKey: string | null;
+    /** Biome atmosphere sheet to load (god-rays / fog), when manifest-known. */
+    overlayKey: string | null;
+}
+
+/**
+ * M11 parallax-pair resolution (Assets-lane convention): prefer the new
+ * 'backdrop.<biome>.far'/'.near' manifest keys; the old single
+ * 'backdrop.<biome>' stays as the far-layer alias until they land.
+ */
+export function backdropSpecFor(
+    art: ArtManifest,
+    room: string | null | undefined,
+    boss: boolean
+): BackdropSpec {
+    const biome = biomeFor(room, boss);
+    const farKey = art[`backdrop.${biome}.far`] ? `backdrop.${biome}.far` : `backdrop.${biome}`;
+    const nearKey = art[`backdrop.${biome}.near`] ? `backdrop.${biome}.near` : null;
+    const overlayKey =
+        biome === 'forest' && art['fx.shafts']
+            ? 'fx.shafts'
+            : biome === 'marsh' && art['fx.fog']
+              ? 'fx.fog'
+              : null;
+    return { biome, farKey, nearKey, overlayKey };
+}
+
+/**
+ * M11 battle stage: parallax backdrop pair (far drifts ±1px over 8s, near
+ * band ±4px over 6s) + the biome atmosphere overlay (forest god-rays at
+ * screen blend, marsh fog band, ruin/lair warm ember pulse). Missing
+ * textures skip cleanly; turbo → static placement (no hot looping tweens);
+ * scene-hosted tweens freeze under pause. Returns the far image (bloom-spike
+ * target for the entry transition), or null when no backdrop art exists.
+ */
+export function addBattleBackdrop(
+    scene: Phaser.Scene,
+    spec: BackdropSpec
+): Phaser.GameObjects.Image | null {
+    let far: Phaser.GameObjects.Image | null = null;
+    if (scene.textures.exists(spec.farKey)) {
+        far = scene.add.image(128, 72, spec.farKey).setDepth(1).setScale(1.02);
+        if (!isTurbo()) {
+            scene.tweens.add({
+                targets: far,
+                x: { from: 127, to: 129 },
+                duration: Math.max(1, dur(4000)), // half-cycle; yoyo → 8s loop
+                yoyo: true,
+                repeat: -1,
+                ease: 'Sine.easeInOut'
+            });
+        }
+    }
+    if (spec.nearKey && scene.textures.exists(spec.nearKey)) {
+        // Bottom band of the 144px backdrop area, slightly overscanned so the
+        // ±4px drift never exposes an edge seam.
+        const near = scene.add.image(128, 112, spec.nearKey).setDepth(1).setScale(1.05, 1);
+        if (!isTurbo()) {
+            scene.tweens.add({
+                targets: near,
+                x: { from: 124, to: 132 },
+                duration: Math.max(1, dur(3000)), // half-cycle; yoyo → 6s loop
+                yoyo: true,
+                repeat: -1,
+                ease: 'Sine.easeInOut'
+            });
+        }
+    }
+    addBattleAtmosphere(scene, spec);
+    return far;
+}
+
+/** Biome overlay strip on the battle stage (depth 4: over enemies, under UI). */
+function addBattleAtmosphere(scene: Phaser.Scene, spec: BackdropSpec): void {
+    if (spec.biome === 'forest' && scene.textures.exists('fx.shafts')) {
+        const shafts = scene.add
+            .image(128, 72, 'fx.shafts')
+            .setDepth(4)
+            .setAlpha(0.16)
+            .setBlendMode(Phaser.BlendModes.SCREEN);
+        if (!isTurbo()) {
+            scene.tweens.add({
+                targets: shafts,
+                alpha: 0.09,
+                duration: Math.max(1, dur(3000)),
+                yoyo: true,
+                repeat: -1,
+                ease: 'Sine.easeInOut'
+            });
+        }
+    } else if (spec.biome === 'marsh' && scene.textures.exists('fx.fog')) {
+        const fog = scene.add.image(128, 120, 'fx.fog').setDepth(4).setAlpha(0.3).setScale(1.1, 1);
+        if (!isTurbo()) {
+            scene.tweens.add({
+                targets: fog,
+                x: { from: 120, to: 136 },
+                duration: Math.max(1, dur(4500)),
+                yoyo: true,
+                repeat: -1,
+                ease: 'Sine.easeInOut'
+            });
+        }
+    } else if (spec.biome === 'ruin' || spec.biome === 'lair') {
+        const pulse = scene.add
+            .rectangle(128, 72, 256, 144, 0xff5a20, 1)
+            .setDepth(4)
+            .setAlpha(isTurbo() ? 0.08 : 0.05)
+            .setBlendMode(Phaser.BlendModes.SCREEN);
+        if (!isTurbo()) {
+            scene.tweens.add({
+                targets: pulse,
+                alpha: 0.12,
+                duration: Math.max(1, dur(2000)), // half-cycle; yoyo → 4s pulse
+                yoyo: true,
+                repeat: -1,
+                ease: 'Sine.easeInOut'
+            });
+        }
+    }
 }
 
 /** Generate the tiny FX textures once (the texture manager is game-global). */
@@ -66,10 +199,30 @@ export function ensureFxTextures(scene: Phaser.Scene): void {
 
 /**
  * Battle-entry transition: quick fade-in + horizontal shutter bars sliding
- * off alternately left/right (~500ms at 1x; instant under turbo).
+ * off alternately left/right (~500ms at 1x; instant under turbo). M11: plus
+ * a camera zoom breath (1.0→1.03→1.0 over 400ms), a white flash, and a brief
+ * bloom spike on the backdrop — all skipped under turbo (instant, no zoom).
  */
-export function playBattleEntry(scene: Phaser.Scene): void {
-    scene.cameras.main.fadeIn(Math.max(1, dur(200)), 0, 0, 0);
+export function playBattleEntry(
+    scene: Phaser.Scene,
+    backdrop?: Phaser.GameObjects.GameObject | null
+): void {
+    const cam = scene.cameras.main;
+    cam.fadeIn(Math.max(1, dur(200)), 0, 0, 0);
+    if (!isTurbo() && dur(400) > 0) {
+        cam.flash(Math.max(1, dur(180)), 255, 255, 255);
+        scene.tweens.add({
+            targets: cam,
+            zoom: 1.03,
+            duration: Math.max(1, dur(200)),
+            yoyo: true,
+            ease: 'Sine.easeInOut',
+            onComplete: () => cam.setZoom(1)
+        });
+        if (backdrop) {
+            bloomSpike(scene, backdrop, { color: 0xffffff, strength: 3, ms: 400 });
+        }
+    }
     const BAR_H = 28; // 224 / 8 bars
     for (let i = 0; i < 8; i++) {
         const bar = scene.add
@@ -113,7 +266,8 @@ export function playSlash(scene: Phaser.Scene, x: number, y: number): void {
     });
 }
 
-/** Sparkle burst for magic/heals: 8 dots flung outward, fading. */
+/** Sparkle burst for magic/heals: 8 dots flung outward, fading. M11: every
+ *  other dot gets a soft glow (4 transient FX objects, gone in ~380ms). */
 export function playSparkles(scene: Phaser.Scene, x: number, y: number, color: number): void {
     ensureFxTextures(scene);
     for (let i = 0; i < 8; i++) {
@@ -124,6 +278,9 @@ export function playSparkles(scene: Phaser.Scene, x: number, y: number, color: n
             .setDepth(40)
             .setScrollFactor(0)
             .setTint(color);
+        if (i % 2 === 0) {
+            bloom(dot, { color, strength: 2, distance: 4 });
+        }
         scene.tweens.add({
             targets: dot,
             x: x + Math.cos(angle) * dist,
@@ -177,8 +334,9 @@ export function playEmberBurst(scene: Phaser.Scene, x: number, y: number): void 
 /**
  * A drifting ember mote for the Intro: rises and fades on a randomized loop.
  * The alpha hits 0 at the top of each cycle, hiding the repeat snap-back.
+ * Returns the mote so callers can bloom a capped few (M11).
  */
-export function spawnEmber(scene: Phaser.Scene): void {
+export function spawnEmber(scene: Phaser.Scene): Phaser.GameObjects.Image {
     ensureFxTextures(scene);
     const tints = [0xffa040, 0xff7020, 0xffc060, 0xe05010];
     const x = Phaser.Math.Between(4, 252);
@@ -198,4 +356,5 @@ export function spawnEmber(scene: Phaser.Scene): void {
         repeat: -1,
         ease: 'Sine.easeOut'
     });
+    return ember;
 }

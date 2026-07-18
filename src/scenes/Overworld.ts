@@ -1,7 +1,8 @@
 import Phaser from 'phaser';
 
-import { addAmbient } from '../systems/ambient';
-import { ensureTexture, registerAnims } from '../systems/anims';
+import { addAmbient, addRoomOverlays } from '../systems/ambient';
+import { ensureTexture, queueSheet, registerAnims } from '../systems/anims';
+import { addHalo, applyGrade, roomGradeFor } from '../systems/grade';
 import { ensureAudio, playMusic } from '../systems/audio';
 import { autosave } from '../systems/autosave';
 import { makeBattleRequest } from '../systems/battle-request';
@@ -100,6 +101,29 @@ export class Overworld extends Phaser.Scene {
         }
         this.addTileShimmer(); // M6: animated water/marsh/ember overlays
         addAmbient(this, this.room, widthPx, heightPx); // M10 atmosphere pass
+        // M11 modern-2D pass: per-room camera grade + screen-space atmosphere
+        // overlay. The forest/marsh overlay sheets ride this scene's loader
+        // (started below for audio); gate/ruin overlays need no assets.
+        const grade = roomGradeFor(this.room);
+        if (grade) {
+            applyGrade(this, grade);
+        }
+        const art = this.reg.get('defs').art;
+        const overlayKey =
+            this.room === 'room2-forest'
+                ? 'fx.shafts'
+                : this.room === 'room3-marsh'
+                  ? 'fx.fog'
+                  : null;
+        if (overlayKey && !this.textures.exists(overlayKey) && art[overlayKey]) {
+            this.load.setBaseURL(import.meta.env.BASE_URL);
+            queueSheet(this.load, art, overlayKey);
+            this.load.once(Phaser.Loader.Events.COMPLETE, () =>
+                addRoomOverlays(this, this.room)
+            );
+        } else {
+            addRoomOverlays(this, this.room);
+        }
         // M10 chests + NPCs (map objects land from the Assets lane; both
         // arrays are simply empty until then).
         this.chests = new Chests(this, this.room, this.mapData.chests, () => this.ui());
@@ -284,6 +308,11 @@ export class Overworld extends Phaser.Scene {
             if (this.anims.exists(idleKey)) {
                 sprite.play(idleKey);
             }
+            // M11: the keeper's lantern gets a small warm halo (additive
+            // sprite — postFX glow counts tanked overworld fps).
+            if (npc.spriteId === 'npc.keeper') {
+                addHalo(this, npc.rect.centerX + 4, npc.rect.centerY - 2, 0xffb050, 9, 0.3).setDepth(8);
+            }
         }
     }
 
@@ -292,6 +321,7 @@ export class Overworld extends Phaser.Scene {
             return;
         }
         let count = 0;
+        let emberGlows = 0; // M11: emissive glow on the first few ember tiles
         for (const layer of this.mapData.tileLayers) {
             if (layer.layer.name === OVERHEAD_LAYER) {
                 continue; // canopies/caps never shimmer
@@ -314,6 +344,10 @@ export class Overworld extends Phaser.Scene {
                         overlay.setTint(roomTint);
                     }
                     overlay.play(animKey);
+                    if (animName === 'ember' && emberGlows < 6) {
+                        emberGlows += 1;
+                        addHalo(this, overlay.x, overlay.y, 0xff8030, 12, 0.3).setDepth(2);
+                    }
                     count += 1;
                     if (count >= SHIMMER_CAP) {
                         return;

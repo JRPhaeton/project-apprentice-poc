@@ -5,6 +5,7 @@ import { ensureTexture, playFirstAnim, registerAnims } from './anims';
 import { playSfx } from './audio';
 import type { GameDefs } from './content';
 import { playHitShake, playPhaseFlash, playSlash, playSparkles } from './fx';
+import { bloom, bloomSpike } from './grade';
 import { dur } from './pacing';
 import { addUiText } from './ui';
 
@@ -71,6 +72,10 @@ export function createEnemyViews(
         // Boss sheets carry cloaked.*/uncloaked.* anim groups (§4).
         const prefix = scene.anims.exists(`${artId}.cloaked.idle`) ? 'cloaked.' : '';
         playFirstAnim(sprite, artId, prefix, ['idle']);
+        // M11: the wisp is an emissive — persistent soft bloom on its sprite.
+        if (artId === 'enemy.wisp') {
+            bloom(sprite, { color: 0x80c8ff, strength: 2, distance: 8 });
+        }
         scene.add.rectangle(x, 116, BAR_W, 3, 0x303040).setDepth(2);
         const hpBar = scene.add
             .rectangle(x - BAR_W / 2, 116, BAR_W, 3, 0x40c050)
@@ -86,10 +91,12 @@ function wait(scene: Phaser.Scene, ms: number): Promise<void> {
     return new Promise((resolve) => scene.time.delayedCall(ms, resolve));
 }
 
-/** Outlined popup number with arc motion: rises, drifts, then falls fading. */
+/** Outlined popup number with arc motion: rises, drifts, then falls fading.
+ *  M11: soft postFX glow on the number (transient — dies with the popup). */
 function popup(scene: Phaser.Scene, x: number, y: number, text: string, color: number): void {
     const shadow = addUiText(scene, 1, 1, text, { color: 0x000000 }).setOrigin(0.5);
     const main = addUiText(scene, 0, 0, text, { color }).setOrigin(0.5);
+    bloom(main, { color, strength: 1.5, distance: 4 });
     const c = scene.add.container(x, y, [shadow, main]).setDepth(60).setScrollFactor(0);
     scene.tweens.add({
         targets: c,
@@ -145,7 +152,11 @@ function playEvent(view: BattleView, e: BattleEvent): number {
             playSfx(scene, 'sfx.hit'); // §6 SFX mapping: damage event lands
             const src = view.enemies.get(e.source);
             if (src) {
-                playFirstAnim(src.sprite, src.artId, src.prefix, e.kind === 'spell' ? ['breath', 'cast', 'attack', 'bite'] : ['bite', 'attack']);
+                const played = playFirstAnim(src.sprite, src.artId, src.prefix, e.kind === 'spell' ? ['breath', 'cast', 'attack', 'bite'] : ['bite', 'attack']);
+                // M11: flame-breath moments spike a warm bloom on the caster.
+                if (played?.endsWith('.breath')) {
+                    bloomSpike(scene, src.sprite, { color: 0xff8030, strength: 5, ms: 500 });
+                }
             }
             const tgt = view.enemies.get(e.target);
             const hitX = tgt ? tgt.sprite.x : 128;
@@ -226,6 +237,8 @@ function playEvent(view: BattleView, e: BattleEvent): number {
                 playPhaseFlash(scene); // M6: screen flash sells the reveal
                 scene.cameras.main.shake(Math.max(1, dur(250)), 0.01);
                 playFirstAnim(ev.sprite, ev.artId, ev.prefix, ['idle']);
+                // M11: the burning-away cloak blooms hot for a beat.
+                bloomSpike(scene, ev.sprite, { color: 0xffa040, strength: 5, ms: 600 });
             }
             ui.log('The cloak falls away!');
             return 600;

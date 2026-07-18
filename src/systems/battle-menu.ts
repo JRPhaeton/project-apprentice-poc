@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 
 import { playSfx } from './audio';
 import { getInputBus, type DirState } from './input-bus';
+import { dur } from './pacing';
 import { isPaused } from './pause';
 import { addPanel, addUiText, type UiPanel, type UiText } from './ui';
 
@@ -93,6 +94,36 @@ export class MenuList {
             return zone;
         });
         this.moveCursor(0);
+        // M11 open micro-tween: 80ms fade + 2px rise on the chrome and rows.
+        // Purely visual — bindKeys() below runs the same tick, so input is
+        // live immediately; turbo (dur→0) skips it. The cursor only fades
+        // (never y-tweened) so moveCursor() stays authoritative mid-tween.
+        if (dur(80) > 0) {
+            const rise: (UiPanel | UiText)[] = [...this.rows];
+            if (this.bg) {
+                rise.push(this.bg);
+            }
+            for (const o of rise) {
+                o.y += 2;
+                o.setAlpha(0);
+            }
+            this.scene.tweens.add({
+                targets: rise,
+                y: '-=2',
+                alpha: 1,
+                duration: Math.max(1, dur(80)),
+                ease: 'Quad.easeOut'
+            });
+            const cursor = this.cursor;
+            if (cursor) {
+                cursor.setAlpha(0);
+                this.scene.tweens.add({
+                    targets: cursor,
+                    alpha: 1,
+                    duration: Math.max(1, dur(80))
+                });
+            }
+        }
         this.bindKeys();
     }
 

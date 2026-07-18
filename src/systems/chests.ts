@@ -3,6 +3,7 @@ import Phaser from 'phaser';
 import { registerAnims } from './anims';
 import { playSfx } from './audio';
 import { autosave } from './autosave';
+import { addHalo } from './grade';
 import type { ChestZone } from './overworld-map';
 import { getRegistry, type GameRegistry } from './registry';
 
@@ -36,6 +37,8 @@ interface ChestEntry {
     opened: boolean;
     sprite: Phaser.GameObjects.Sprite | null;
     fallback: Phaser.GameObjects.Rectangle | null;
+    /** M11 glint halo (additive sprite), destroyed on open. */
+    halo: Phaser.GameObjects.Image | null;
 }
 
 export class Chests {
@@ -66,10 +69,16 @@ export class Chests {
             const y = zone.rect.centerY;
             let sprite: Phaser.GameObjects.Sprite | null = null;
             let fallback: Phaser.GameObjects.Rectangle | null = null;
+            let halo: Phaser.GameObjects.Image | null = null;
             if (hasSheet) {
                 sprite = scene.add
                     .sprite(x, y, CHEST_KEY, opened ? this.openedFrame : 0)
                     .setDepth(DEPTH);
+                if (!opened) {
+                    // M11 chest glint — additive halo, not postFX (overworld
+                    // glow counts tanked fps on integrated GPUs).
+                    halo = addHalo(scene, x, y, 0xffd870, 10, 0.3).setDepth(DEPTH - 1);
+                }
             } else {
                 // Placeholder-first: small gold box, dimmed once opened.
                 fallback = scene.add
@@ -77,7 +86,7 @@ export class Chests {
                     .setStrokeStyle(1, opened ? 0x907830 : 0xffe080)
                     .setDepth(DEPTH);
             }
-            this.entries.push({ zone, flagKey, opened, sprite, fallback });
+            this.entries.push({ zone, flagKey, opened, sprite, fallback, halo });
         });
     }
 
@@ -107,6 +116,8 @@ export class Chests {
 
     private open(entry: ChestEntry): void {
         entry.opened = true;
+        entry.halo?.destroy(); // M11: the glint dies with the loot
+        entry.halo = null;
         const animKey = `${CHEST_KEY}.open`;
         if (entry.sprite && this.scene.anims.exists(animKey)) {
             entry.sprite.play(animKey); // repeat 0 — the open frame persists

@@ -111,6 +111,11 @@ export function addUiText(
  * Window chrome: a 'ui.panel' NineSlice (16px corners) when the sheet loaded
  * and the renderer is WebGL (NineSlice is WebGL-only), else the previous
  * stroked translucent rectangle. Origin is top-left in both shapes.
+ *
+ * M11: every panel carries a baked-look drop shadow via postFX Shadow — the
+ * one-object choice (over a separate offset rect) so the shadow shares the
+ * panel's depth/visibility/destroy lifecycle for free. WebGL only; the
+ * Canvas fallback rect stays shadowless (consistent with all M11 FX no-ops).
  */
 export function addPanel(
     scene: Phaser.Scene,
@@ -119,15 +124,23 @@ export function addPanel(
     width: number,
     height: number
 ): UiPanel {
-    if (scene.textures.exists(PANEL_KEY) && scene.game.renderer.type === Phaser.WEBGL) {
+    const webgl = scene.game.renderer.type === Phaser.WEBGL;
+    let panel: UiPanel;
+    if (scene.textures.exists(PANEL_KEY) && webgl) {
         // Shrink the slice insets for panels thinner than two 16px corners.
         const inset = Math.min(16, Math.floor(width / 2), Math.floor(height / 2));
-        return scene.add
+        panel = scene.add
             .nineslice(x, y, PANEL_KEY, 0, width, height, inset, inset, inset, inset)
             .setOrigin(0, 0);
+    } else {
+        panel = scene.add
+            .rectangle(x, y, width, height, 0x101020, 0.92)
+            .setOrigin(0, 0)
+            .setStrokeStyle(1, 0x8080a0);
     }
-    return scene.add
-        .rectangle(x, y, width, height, 0x101020, 0.92)
-        .setOrigin(0, 0)
-        .setStrokeStyle(1, 0x8080a0);
+    if (webgl) {
+        // Light anchored top-left → soft dark falloff toward bottom-right.
+        panel.postFX.addShadow(0, 0, 0.06, 0.4, 0x000000, 4, 1);
+    }
+    return panel;
 }

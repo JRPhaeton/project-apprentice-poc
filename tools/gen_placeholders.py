@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""Deterministic FINAL-art generator — Assets lane (M6 presentation pass).
+"""Deterministic FINAL-art generator — Assets lane (M11 "Modern 2D" pass).
 
 Evolved from the M2 placeholder generator under the same deterministic
 contract: no randomness anywhere — dithering is Bayer-matrix arithmetic and
 all detail placement is pure arithmetic, so re-running reproduces every file
 byte-for-byte. Generates the shipping art set per docs/ART_BIBLE.md (LOCKED
-dims; M6 amendment: hero overworld gains a 2-frame walk per facing).
+dims; M11/GDD row 11: modern-2D budgets and the Chained Echoes register —
+hue-shifted shadow ramps, soft interior AA, rim + bounce light, parallax
+backdrop pairs + screen-blend overlay strips).
 
 Outputs (all self-authored, CC0 — see assets/CREDITS.md):
   public/assets/tilesets/overworld.png     256x128  tileset v2 (M8): 16x8
@@ -24,12 +26,16 @@ Outputs (all self-authored, CC0 — see assets/CREDITS.md):
   public/assets/sprites/npc-keeper.png       32x48   2 frames 16x24 (M10)
       the gate Keeper: older robed figure, lantern in hand, 2-frame idle
       sway; top row only, pad row transparent for the CI grid
-  public/assets/sprites/emberheart.png       64x32   2 frames 32x32 (M10)
-      the Emberheart, same key art as the PWA icons; 2-frame flicker
+  public/assets/sprites/emberheart.png      128x32   4 frames 32x32 (M11)
+      the Emberheart re-lit at the modern budget; 4-frame burn (frame 0
+      keeps the PWA icon's opaque silhouette; the icons stay M10 art)
   public/assets/sprites/spider.png          448x64   7 frames 64x64
-  public/assets/sprites/wisp.png            448x64   7 frames 64x64
+  public/assets/sprites/wisp.png            576x64   9 frames 64x64 (M11:
+      idle 0-3 breathing loop, cast 4-5, attack 6-8)
   public/assets/sprites/revenant.png        448x64   7 frames 64x64
-  public/assets/sprites/chimera.png        1440x96  15 frames 96x96
+  public/assets/sprites/chimera.png        1632x96  17 frames 96x96 (M11:
+      cloaked 0-4; uncloaked idle 5-8 wing beat, attack 9-11, tell 12-13,
+      breath 14-16)
   public/assets/sprites/tile-anim.png        96x16   6 frames 16x16
       0,1 water / 2,3 marsh-water / 4,5 ember-glow shimmer pairs; frames
       0/2/4 are pixel-identical to the tileset-v2 tiles that carry the
@@ -38,7 +44,12 @@ Outputs (all self-authored, CC0 — see assets/CREDITS.md):
   public/assets/sprites/ui-touch.png        160x32   5 frames 32x32 (M7)
       0 D-pad base, 1 pressed-arm overlay (UP; engine rotates), 2 'A'
       button, 3 'B' button, 4 pause — ui-panel chrome family
-  public/assets/sprites/backdrops/{forest,marsh,ruin,lair}.png  256x144
+  public/assets/sprites/backdrops/<biome>-far.png   256x144 (M11) full
+      painterly scene per biome; the legacy backdrop.<biome> key aliases it
+  public/assets/sprites/backdrops/<biome>-near.png  256x64  (M11) near
+      parallax band, transparent top, x-seamless
+  public/assets/sprites/fx-shafts.png       256x144 (M11) god-ray overlay
+  public/assets/sprites/fx-fog.png          256x64  (M11) fog-band overlay
   public/assets/fonts/font.png              128x48  8x8 bitmap font
   public/assets/fonts/font.fnt              BMFont XML (Phaser-compatible)
   public/assets/icons/icon-192.png          192x192 PWA icon (M7)
@@ -48,11 +59,13 @@ Outputs (all self-authored, CC0 — see assets/CREDITS.md):
       not 16-divisible and CI's source-asset-lint grid-checks every PNG
       under public/assets/, so the apple icon must live outside assets/
 
-Palette discipline (ART_BIBLE §2): the tileset draws from one <=32-color
-master pool with <=16 colors per 16x16 tile; every sprite sheet, backdrop
-and UI texture <=16 colors; shared near-black-blue outline across battle
-sprites; the warm ember accent is reserved for the hero, interaction
-glints, and the Chimera's/lair's fire.
+Palette discipline (ART_BIBLE §2, M11 budgets): the tileset draws from one
+<=64-color master pool with <=24 colors per 16x16 tile; sprite sheets <=48
+colors; backdrops + fx overlay strips <=96. Ramps are 6-8 steps with
+HUE-SHIFTED ends (shadows cool toward blue/violet/teal, lights warm), soft
+interior AA at ramp boundaries, rim + bounce light on sprites; shared
+near-black-blue outline across battle sprites; the warm ember accent stays
+reserved for the hero, interaction glints, and the Chimera's/lair's fire.
 
 Run from anywhere:  python3 tools/gen_placeholders.py
 Exit code is non-zero if any self-check fails.
@@ -145,6 +158,49 @@ def leg(d, hip, foot, lift, color, width=2):
     d.line([(kx, ky), foot], fill=color, width=width)
 
 
+def mix(a, b):
+    """Midpoint of two opaque colors (the AA blend step)."""
+    return ((a[0] + b[0]) // 2, (a[1] + b[1]) // 2, (a[2] + b[2]) // 2, 255)
+
+
+def aa_pass(t, families):
+    """Soft interior anti-aliasing (M11 modern-pixel signature): wherever a
+    pixel of one ramp step is cornered by >= 2 four-neighbours of the
+    ADJACENT step of the same family, it becomes their midpoint — staircase
+    corners melt, outlines stay crisp. `families` is a list of ordered ramp
+    color lists; only consecutive steps blend, so the added colors are
+    bounded (<= len(family)-1 midpoints per family). Single deterministic
+    pass (changes collected, then applied)."""
+    px = t.load()
+    w, h = t.size
+    mid = {}
+    for fam in families:
+        for i in range(len(fam) - 1):
+            m = mix(fam[i], fam[i + 1])
+            mid[(fam[i], fam[i + 1])] = m
+            mid[(fam[i + 1], fam[i])] = m
+    out = []
+    for y in range(h):
+        for x in range(w):
+            c = px[x, y]
+            if c[3] != 255:
+                continue
+            partner = None
+            n = 0
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                nx, ny = x + dx, y + dy
+                if 0 <= nx < w and 0 <= ny < h:
+                    cc = px[nx, ny]
+                    if (c, cc) in mid and (partner is None or cc == partner):
+                        partner = cc
+                        n += 1
+            if partner is not None and n >= 2:
+                out.append((x, y, mid[(c, partner)]))
+    for x, y, m in out:
+        px[x, y] = m
+    return t
+
+
 def rim_light(t, mapping, dirs=((0, -1), (-1, 0))):
     """SNES rim light: recolor body pixels sitting just inside the shared
     OUTLINE wherever that outline faces transparency on the lit (top/left)
@@ -172,6 +228,12 @@ def rim_light(t, mapping, dirs=((0, -1), (-1, 0))):
     return t
 
 
+def bounce_light(t, mapping):
+    """Cool bounce light on the shadow silhouette (bottom/right edges) — the
+    counterpart of rim_light's key light; M11 modern-pixel signature."""
+    return rim_light(t, mapping, dirs=((0, 1), (1, 0)))
+
+
 # ---------------------------------------------------------------------------
 # 1. Tileset v2 (M8 overworld depth pass) — 256x128, 16 cols x 8 rows of
 #    16px tiles: base terrains, marching-squares transition sets, tree
@@ -192,16 +254,28 @@ gen_tileset = tileset_v2.build_sheet
 #    4,5 left / 6,7 right (2-frame walk per facing).
 
 HERO_PAL = {
-    "cloak_dk": (44, 50, 70, 255),
-    "cloak": (58, 66, 88, 255),
-    "cloak_lt": (80, 92, 120, 255),
-    "cloak_hi": (112, 128, 158, 255),
-    "skin": (232, 200, 160, 255),
-    "skin_dk": (196, 158, 120, 255),
-    "boot": (70, 50, 34, 255),
-    "ember": (232, 144, 48, 255),
-    "ember_lt": (248, 200, 88, 255),
+    # M11 cloak ramp — shadows hue-shift toward violet, lights toward warm steel
+    "cloak_dp": (34, 32, 66, 255),
+    "cloak_dk": (46, 48, 84, 255),
+    "cloak": (60, 68, 100, 255),
+    "cloak_lt": (86, 96, 132, 255),
+    "cloak_hi": (120, 134, 170, 255),
+    "cloak_rim": (164, 178, 212, 255),
+    "skin": (236, 202, 158, 255),
+    "skin_dk": (198, 152, 122, 255),
+    "skin_hi": (255, 228, 188, 255),
+    "boot": (74, 50, 40, 255),
+    "boot_lt": (110, 76, 52, 255),
+    "ember": (236, 146, 48, 255),
+    "ember_lt": (250, 202, 92, 255),
 }
+
+HERO_FAMILIES = (
+    (HERO_PAL["cloak_dp"], HERO_PAL["cloak_dk"], HERO_PAL["cloak"],
+     HERO_PAL["cloak_lt"], HERO_PAL["cloak_hi"], HERO_PAL["cloak_rim"]),
+    (HERO_PAL["skin_dk"], HERO_PAL["skin"], HERO_PAL["skin_hi"]),
+    (HERO_PAL["boot"], HERO_PAL["boot_lt"]),
+)
 
 
 def hero_frame(facing, step=0):
@@ -217,6 +291,7 @@ def hero_frame(facing, step=0):
     # ---- boots (y20-23), alternating stance = the walk read ----
     def boot(x0, y0, w=2):
         d.rectangle([x0, y0, x0 + w - 1, 23], fill=P["boot"])
+        px[x0, y0] = P["boot_lt"]  # lit cuff
         d.line([(x0, 23), (x0 + w - 1, 23)], fill=OUTLINE)
 
     if not side:
@@ -241,8 +316,9 @@ def hero_frame(facing, step=0):
     d.line([(4, 11), (hem_l + 1, 19)], fill=P["cloak_lt"])
     d.line([(5, 11), (hem_l + 2, 19)], fill=P["cloak_lt"])
     d.line([(10, 11), (hem_r - 1, 19)], fill=P["cloak_dk"])
-    d.line([(11, 12), (hem_r - 1, 19)], fill=P["cloak_dk"])
+    d.line([(11, 12), (hem_r - 1, 19)], fill=P["cloak_dp"])  # deepest fold, violet
     dither(px, 3, 16, 12, 19, P["cloak_dk"], 4, ox=sw, only=P["cloak"])
+    dither(px, 6, 18, 12, 19, P["cloak_dp"], 4, ox=sw + 1, only=P["cloak_dk"])  # hem depth
     for hx in range(hem_l + 2 + sw, hem_r - 1, 3):  # ember hem trim (sparse)
         px[hx, 20] = P["ember"]
     px[hem_l + 2 + sw, 20] = P["ember_lt"]
@@ -250,8 +326,11 @@ def hero_frame(facing, step=0):
     # ---- hood + head (y1-10, ~10px = FF6 big-head proportion) ----
     d.ellipse([3, 1 + b, 12, 10 + b], fill=P["cloak"], outline=OUTLINE)
     d.arc([3, 1 + b, 12, 10 + b], 160, 300, fill=P["cloak_lt"])  # rim sheen
+    d.arc([4, 2 + b, 11, 9 + b], 180, 280, fill=P["cloak_hi"])  # inner sheen band
     px[4, 2 + b] = P["cloak_hi"]
-    px[5, 1 + b] = P["cloak_hi"]
+    px[5, 1 + b] = P["cloak_rim"]  # hood crown catches the sky
+    px[6, 1 + b] = P["cloak_hi"]
+    dither(px, 8, 2 + b, 11, 5 + b, P["cloak_dk"], 5, ox=1, only=P["cloak"])  # shaded hood side
 
     if facing == "down":
         d.rectangle([5, 5 + b, 10, 9 + b], fill=P["skin"])
@@ -259,6 +338,8 @@ def hero_frame(facing, step=0):
         d.line([(5, 9 + b), (10, 9 + b)], fill=P["skin_dk"])  # chin shade
         px[5, 8 + b] = P["skin_dk"]
         px[10, 8 + b] = P["skin_dk"]
+        px[7, 6 + b] = P["skin_hi"]  # brow catch-light
+        px[8, 6 + b] = P["skin_hi"]
         px[6, 7 + b] = OUTLINE  # eyes
         px[9, 7 + b] = OUTLINE
         px[7, 11] = P["ember"]  # clasp
@@ -279,6 +360,7 @@ def hero_frame(facing, step=0):
         d.line([(4, 5 + b), (8, 5 + b)], fill=P["cloak_dk"])
         d.line([(4, 9 + b), (8, 9 + b)], fill=P["skin_dk"])
         px[8, 8 + b] = P["skin_dk"]  # jaw
+        px[5, 6 + b] = P["skin_hi"]  # brow catch-light
         px[5, 7 + b] = OUTLINE  # eye
         d.line([(9, 3 + b), (11, 8 + b)], fill=P["cloak_dk"])  # hood fold
         px[4, 11] = P["ember"]  # clasp at the throat
@@ -289,15 +371,18 @@ def hero_frame(facing, step=0):
         d.line([(7, 5 + b), (11, 5 + b)], fill=P["cloak_dk"])
         d.line([(7, 9 + b), (11, 9 + b)], fill=P["skin_dk"])
         px[7, 8 + b] = P["skin_dk"]
+        px[10, 6 + b] = P["skin_hi"]  # brow catch-light
         px[10, 7 + b] = OUTLINE
         d.line([(6, 3 + b), (4, 8 + b)], fill=P["cloak_lt"])
         px[11, 11] = P["ember"]
         d.line([(5, 12), (hem_l + 1, 18)], fill=P["cloak_dk"])
         d.line([(9, 13), (10, 16)], fill=P["cloak_dk"])
 
-    # SNES rim light on the lit (top/left) silhouette
-    rim_light(t, {P["cloak"]: P["cloak_lt"], P["cloak_lt"]: P["cloak_hi"]})
-    return t
+    # modern light wrap: key rim on the lit (top/left) silhouette, cool
+    # bounce on the shadow side, then soft interior AA over the ramps
+    rim_light(t, {P["cloak"]: P["cloak_lt"], P["cloak_lt"]: P["cloak_hi"], P["cloak_hi"]: P["cloak_rim"]})
+    bounce_light(t, {P["cloak_dp"]: P["cloak_dk"], P["cloak_dk"]: P["cloak"], P["boot"]: P["boot_lt"]})
+    return aa_pass(t, HERO_FAMILIES)
 
 
 def gen_hero():
@@ -317,22 +402,35 @@ def gen_hero():
 #     the engine under hero + patrols) · 7 spare (transparent).
 
 MINI_PAL = {
+    "moss_dp": (34, 44, 42, 255),   # cool teal-shifted deep shadow
     "moss_dk": (52, 64, 38, 255),
     "moss": (76, 92, 56, 255),
-    "moss_lt": (102, 120, 74, 255),
+    "moss_lt": (104, 122, 74, 255),
+    "moss_hi": (140, 156, 94, 255),  # warm lit crown
     "eye": (154, 88, 184, 255),
+    "teal_dp": (28, 96, 110, 255),
     "teal_dk": (48, 140, 150, 255),
     "teal": (88, 196, 204, 255),
     "teal_lt": (142, 218, 224, 255),
     "white": (246, 252, 255, 255),
     "bone": (210, 200, 172, 255),
     "bone_dk": (166, 156, 130, 255),
+    "bone_lt": (236, 228, 204, 255),
+    "cloth_dp": (38, 28, 60, 255),
     "cloth_dk": (50, 38, 72, 255),
     "cloth": (74, 58, 100, 255),
+    "cloth_lt": (104, 86, 132, 255),
     "rev_eye": (92, 204, 196, 255),
     "sh_core": (20, 22, 40, 120),
     "sh_edge": (20, 22, 40, 60),
 }
+
+MINI_FAMILIES = (
+    (MINI_PAL["moss_dp"], MINI_PAL["moss_dk"], MINI_PAL["moss"], MINI_PAL["moss_lt"], MINI_PAL["moss_hi"]),
+    (MINI_PAL["teal_dp"], MINI_PAL["teal_dk"], MINI_PAL["teal"], MINI_PAL["teal_lt"], MINI_PAL["white"]),
+    (MINI_PAL["bone_dk"], MINI_PAL["bone"], MINI_PAL["bone_lt"]),
+    (MINI_PAL["cloth_dp"], MINI_PAL["cloth_dk"], MINI_PAL["cloth"], MINI_PAL["cloth_lt"]),
+)
 
 
 def mini_spider(step):
@@ -350,13 +448,18 @@ def mini_spider(step):
         fx2 = fx + (s if k >= 2 else -s) * (1 if outer else 0)
         d.line([(hx, 10 + b), (min(15, max(0, (hx + fx2) // 2)), ky)], fill=OUTLINE)
         d.line([(min(15, max(0, (hx + fx2) // 2)), ky), (max(0, min(15, fx2)), fy)], fill=OUTLINE)
-    # abdomen + cephalothorax
+    # abdomen + cephalothorax (cool belly shadow, warm lit crown)
     d.ellipse([2, 6 + b, 9, 12 + b], fill=P["moss_dk"], outline=OUTLINE)
+    for xx in range(3, 9, 2):
+        px[xx, 11 + b] = P["moss_dp"]
     d.ellipse([3, 7 + b, 8, 10 + b], fill=P["moss"])
     px[4, 8 + b] = P["moss_lt"]
     px[5, 7 + b] = P["moss_lt"]
+    px[4, 7 + b] = P["moss_hi"]
     d.ellipse([8, 8 + b, 13, 12 + b], fill=P["moss"], outline=OUTLINE)
     px[10, 9 + b] = P["moss_lt"]
+    px[11, 9 + b] = P["moss_hi"]
+    px[9, 11 + b] = P["moss_dk"]
     # bone chevron on the abdomen + violet eyes
     px[5, 10 + b] = P["bone"]
     px[6, 9 + b] = P["bone"]
@@ -384,6 +487,8 @@ def mini_wisp(step):
     px[9, cy] = P["teal_lt"]
     px[10, cy + 2] = P["teal_dk"]
     px[6, cy + 2] = P["teal_dk"]
+    px[8, cy + 3] = P["teal_dp"]  # cool under-shadow inside the orb
+    px[7, cy + 3] = P["teal_dp"]
     # flame lick + sparks flicker with the phase
     px[8, cy - 5] = P["teal_lt"] if step else P["teal_dk"]
     px[7 + p * 2, cy - 6] = P["teal_dk"] if step else P["teal_lt"]
@@ -405,14 +510,17 @@ def mini_revenant(step):
         fill=P["cloth"],
         outline=OUTLINE,
     )
-    d.line([(6 + lean, 7), (5, 12)], fill=P["cloth_dk"])
+    d.line([(6 + lean, 7), (5, 12)], fill=P["cloth_lt"])  # lit fold
     d.line([(9 + lean, 7), (10, 12)], fill=P["cloth_dk"])
+    d.line([(10 + lean, 8), (11, 12)], fill=P["cloth_dp"])  # deep violet fold
+    px[7 + lean, 13] = P["cloth_dp"]
     # skull
     d.ellipse([5 + lean, 1, 10 + lean, 6], fill=P["bone"], outline=OUTLINE)
     d.line([(6 + lean, 5), (9 + lean, 5)], fill=P["bone_dk"])  # jaw
     px[6 + lean, 3] = P["rev_eye"]
     px[9 + lean, 3] = P["rev_eye"]
-    px[6 + lean, 1] = P["white"] if step else P["bone"]  # crown glint
+    px[6 + lean, 1] = P["bone_lt"] if step else P["bone"]  # crown glint
+    px[7 + lean, 1] = P["bone_lt"]
     # bone arm
     d.line([(10 + lean, 8), (12 + lean, 10)], fill=P["bone_dk"])
     return t
@@ -443,6 +551,8 @@ def gen_minis():
         mini_revenant(0), mini_revenant(1), mini_shadow(),
     )
     for i, f in enumerate(frames):
+        if i < 6:  # AA per frame (never across cells); shadow stays soft-alpha
+            aa_pass(f, MINI_FAMILIES)
         img.paste(f, (i * 16, 0))
     return img  # frame 7 intentionally transparent (spare)
 
@@ -454,17 +564,27 @@ def gen_minis():
 #     3-tone planks + cool iron bands so it reads at 1x on every ground.
 
 CHEST_PAL = {
+    "wood_dp": (56, 38, 42, 255),   # cool maroon-shifted deep shadow
     "wood_dk": (70, 50, 34, 255),   # shared with the hero's boots
     "wood": (104, 76, 46, 255),
     "wood_lt": (140, 106, 66, 255),
-    "wood_hi": (172, 140, 92, 255),
+    "wood_hi": (176, 142, 92, 255),
     "iron_dk": (58, 62, 82, 255),
     "iron": (96, 102, 126, 255),
     "iron_lt": (150, 150, 198, 255),  # ui bevel_lo family
+    "iron_hi": (210, 214, 242, 255),  # specular glint on the metal
     "ember": (232, 144, 48, 255),
     "ember_lt": (248, 200, 88, 255),
     "glow_dp": (120, 42, 26, 255),  # dark rust (icon 'deep')
+    "glow_hot": (255, 244, 214, 255),
 }
+
+# Wood + iron ramps only: the ember glint/glow accents are tiny hand-placed
+# reads, so the AA pass must never soften them away.
+CHEST_FAMILIES = (
+    (CHEST_PAL["wood_dp"], CHEST_PAL["wood_dk"], CHEST_PAL["wood"], CHEST_PAL["wood_lt"], CHEST_PAL["wood_hi"]),
+    (CHEST_PAL["iron_dk"], CHEST_PAL["iron"], CHEST_PAL["iron_lt"], CHEST_PAL["iron_hi"]),
+)
 
 
 def chest_frame(is_open):
@@ -487,12 +607,14 @@ def chest_frame(is_open):
         d.line([(3, 4), (12, 4)], fill=P["wood_hi"])
         d.line([(3, 6), (12, 6)], fill=P["wood"])  # lid underside
         d.rectangle([2, 7, 13, 14], fill=P["wood"], outline=OUTLINE)
-        d.line([(3, 7), (12, 7)], fill=P["wood_dk"])  # seam shadow
+        d.line([(3, 7), (12, 7)], fill=P["wood_dp"])  # seam shadow, cool
         d.line([(3, 10), (12, 10)], fill=P["wood_dk"])  # plank joints
         d.line([(3, 13), (12, 13)], fill=P["wood_dk"])
         dither(px, 3, 11, 12, 12, P["wood_dk"], 4, only=P["wood"])
+        dither(px, 3, 13, 12, 13, P["wood_dp"], 6, ox=1, only=P["wood_dk"])
         bands(4, 13)
         d.rectangle([6, 6, 9, 9], fill=P["iron"], outline=OUTLINE)  # hasp
+        px[6, 6] = P["iron_hi"]  # specular on the hasp shoulder
         px[7, 7] = P["ember_lt"]  # the ember glint that says "open me"
         px[8, 7] = P["ember"]
         px[7, 8] = P["ember"]
@@ -508,8 +630,8 @@ def chest_frame(is_open):
         d.rectangle([3, 4, 12, 7], fill=P["ember"])
         d.rectangle([5, 4, 10, 7], fill=P["ember_lt"])
         dither(px, 3, 4, 12, 5, P["ember_lt"], 6, only=P["ember"])
-        px[7, 4] = (255, 244, 214, 255)  # hottest sliver at the rim
-        px[8, 5] = (255, 244, 214, 255)
+        px[7, 4] = P["glow_hot"]  # hottest sliver at the rim
+        px[8, 5] = P["glow_hot"]
         # body y8-14, planks + straps as on the closed frame
         d.rectangle([2, 8, 13, 14], fill=P["wood"], outline=OUTLINE)
         d.line([(3, 8), (12, 8)], fill=P["wood_lt"])  # rim lit by the glow
@@ -518,11 +640,14 @@ def chest_frame(is_open):
         dither(px, 3, 12, 12, 12, P["wood_dk"], 4, only=P["wood"])
         bands(9, 13)
         d.rectangle([6, 9, 9, 11], fill=P["iron"], outline=OUTLINE)  # dropped hasp
+        px[6, 9] = P["iron_hi"]
         px[7, 9] = P["ember_lt"]
         # sparks rising past the lid
         px[3, 1] = P["ember_lt"]
         px[12, 0] = P["ember"]
-    return t
+    rim_light(t, {P["wood"]: P["wood_lt"], P["wood_lt"]: P["wood_hi"]})
+    bounce_light(t, {P["wood_dk"]: P["wood"], P["wood_dp"]: P["wood_dk"]})
+    return aa_pass(t, CHEST_FAMILIES)
 
 
 def gen_chest():
@@ -542,19 +667,28 @@ def gen_chest():
 #     bow, hem shift, the lantern swings and its glint blinks.
 
 KEEPER_PAL = {
-    "robe_dk": (56, 52, 46, 255),
+    "robe_dp": (44, 40, 54, 255),   # cool violet-grey deep shadow
+    "robe_dk": (58, 53, 52, 255),
     "robe": (78, 72, 62, 255),
-    "robe_lt": (104, 96, 80, 255),
-    "robe_hi": (132, 124, 104, 255),
+    "robe_lt": (106, 98, 78, 255),
+    "robe_hi": (138, 128, 100, 255),  # warm-lit weave
     "skin": (232, 200, 160, 255),
     "skin_dk": (196, 158, 120, 255),
+    "skin_hi": (255, 228, 188, 255),
     "bone": (210, 200, 172, 255),   # beard/hair (revenant bone family)
     "bone_dk": (166, 156, 130, 255),
+    "bone_hi": (236, 228, 202, 255),
     "boot": (70, 50, 34, 255),
     "iron_dk": (58, 62, 82, 255),   # lantern cage
     "ember": (232, 144, 48, 255),
     "ember_lt": (248, 200, 88, 255),
 }
+
+KEEPER_FAMILIES = (
+    (KEEPER_PAL["robe_dp"], KEEPER_PAL["robe_dk"], KEEPER_PAL["robe"], KEEPER_PAL["robe_lt"], KEEPER_PAL["robe_hi"]),
+    (KEEPER_PAL["skin_dk"], KEEPER_PAL["skin"], KEEPER_PAL["skin_hi"]),
+    (KEEPER_PAL["bone_dk"], KEEPER_PAL["bone"], KEEPER_PAL["bone_hi"]),
+)
 
 
 def keeper_frame(sway):
@@ -579,16 +713,20 @@ def keeper_frame(sway):
     )
     d.line([(4, 10 + b), (3, 20)], fill=P["robe_lt"])  # lit left flank
     d.line([(5, 10 + b), (4, 20)], fill=P["robe_lt"])
+    px[4, 12 + b] = P["robe_hi"]  # warm shoulder catch
     d.line([(10, 11 + b), (11, 20)], fill=P["robe_dk"])  # shaded right
+    d.line([(11, 13 + b), (12, 20)], fill=P["robe_dp"])  # deepest cool fold
     dither(px, 3, 17, 12, 20, P["robe_dk"], 3, ox=hem, only=P["robe"])
+    dither(px, 6, 19, 12, 20, P["robe_dp"], 4, ox=hem + 1, only=P["robe_dk"])
     d.line([(4, 14 + b), (10, 14 + b)], fill=P["bone_dk"])  # rope belt
     px[5, 14 + b] = P["bone"]
     d.line([(7, 15 + b), (7 - hem, 20)], fill=P["robe_dk"])  # center fold
 
     # ---- head (y2-9): bald crown, bone hair fringe, long beard ----
     d.ellipse([4, 2 + b, 11, 9 + b], fill=P["skin"], outline=OUTLINE)
-    px[5, 3 + b] = P["skin"]  # bald crown highlight
-    px[6, 2 + b] = P["skin"]
+    px[5, 3 + b] = P["skin_hi"]  # bald crown highlight
+    px[6, 2 + b] = P["skin_hi"]
+    px[7, 3 + b] = P["skin_hi"]
     d.line([(4, 6 + b), (4, 8 + b)], fill=P["bone"])  # temple fringes
     d.line([(11, 6 + b), (11, 8 + b)], fill=P["bone_dk"])
     d.line([(5, 5 + b), (6, 5 + b)], fill=P["bone_dk"])  # heavy brows
@@ -616,8 +754,9 @@ def keeper_frame(sway):
     # faint warm spill onto the robe beside the lantern
     px[lx - 1, 18 + b] = P["ember"]
 
-    rim_light(t, {P["robe"]: P["robe_lt"], P["robe_lt"]: P["robe_hi"], P["bone"]: (232, 224, 200, 255)})
-    return t
+    rim_light(t, {P["robe"]: P["robe_lt"], P["robe_lt"]: P["robe_hi"], P["bone"]: P["bone_hi"]})
+    bounce_light(t, {P["robe_dk"]: P["robe"], P["robe_dp"]: P["robe_dk"]})
+    return aa_pass(t, KEEPER_FAMILIES)
 
 
 def gen_npc_keeper():
@@ -632,21 +771,29 @@ def gen_npc_keeper():
 #     Forward (toward hero) = +x. Per-frame leg gait for articulation.
 
 SPIDER_PAL = {
-    "moss_deep": (34, 44, 28, 255),
-    "moss_dk": (52, 64, 38, 255),
+    "moss_deep": (30, 42, 42, 255),  # hue-shifted: deep shadow dives teal
+    "moss_dk": (50, 64, 44, 255),
     "moss": (76, 92, 56, 255),
     "moss_lt": (102, 120, 74, 255),
     "pale": (128, 146, 96, 255),
-    "pale_lt": (152, 170, 118, 255),
+    "pale_lt": (154, 170, 116, 255),
+    "pale_hi": (186, 196, 138, 255),  # warm sun-side crown
     "bone": (198, 190, 162, 255),
     "bone_dk": (150, 142, 116, 255),
     "bone_lt": (226, 220, 198, 255),
     "eye_deep": (104, 52, 136, 255),
     "eye": (154, 88, 184, 255),
     "eye_lt": (200, 140, 220, 255),
-    "rim": (172, 196, 170, 255),
+    "rim": (176, 198, 172, 255),
     "shadow": (34, 36, 58, 255),
 }
+
+SPIDER_FAMILIES = (
+    (SPIDER_PAL["moss_deep"], SPIDER_PAL["moss_dk"], SPIDER_PAL["moss"], SPIDER_PAL["moss_lt"],
+     SPIDER_PAL["pale"], SPIDER_PAL["pale_lt"], SPIDER_PAL["pale_hi"]),
+    (SPIDER_PAL["bone_dk"], SPIDER_PAL["bone"], SPIDER_PAL["bone_lt"]),
+    (SPIDER_PAL["eye_deep"], SPIDER_PAL["eye"], SPIDER_PAL["eye_lt"]),
+)
 
 
 def draw_spider(f):
@@ -680,6 +827,7 @@ def draw_spider(f):
     dither(px, cx - 20, cy - 2, cx - 1, cy + 6, P["moss_dk"], 5, only=P["moss"])
     dither(px, cx - 18, cy - 11, cx - 5, cy - 3, P["pale"], 6, only=P["moss_lt"])
     dither(px, cx - 16, cy - 10, cx - 8, cy - 5, P["pale_lt"], 5, only=P["pale"])
+    dither(px, cx - 14, cy - 10, cx - 9, cy - 7, P["pale_hi"], 4, ox=1, only=P["pale_lt"])
     d.polygon([(cx - 21, cy - 3), (cx - 17, cy - 6), (cx - 17, cy)], fill=P["moss_dk"])
     # bristle flicks along the abdomen crown
     for i, bxx in enumerate(range(cx - 17, cx - 4, 3)):
@@ -734,9 +882,10 @@ def draw_spider(f):
             )
             t.putpixel((fx0, fy0), P["bone_dk"])
             t.putpixel((fx0 + 1, fy0 + 2), P["bone_lt"])
-    # cold dusk rim light along the lit silhouette
+    # cold dusk rim light along the lit silhouette + cool ground bounce
     rim_light(t, {P["moss_lt"]: P["rim"], P["moss"]: P["rim"], P["moss_dk"]: P["moss_lt"], P["pale"]: P["rim"]})
-    return t
+    bounce_light(t, {P["moss_deep"]: P["moss_dk"], P["moss_dk"]: P["moss"]})
+    return aa_pass(t, SPIDER_FAMILIES)
 
 
 def gen_spider():
@@ -761,17 +910,22 @@ def gen_spider():
 
 WISP_PAL = {
     "white": (246, 252, 255, 255),
-    "spark": (255, 255, 214, 255),
+    "spark": (255, 255, 214, 255),  # warm heart — the hue-shifted hot end
     "pale": (196, 232, 240, 255),
     "teal_lt": (142, 218, 224, 255),
     "teal": (88, 196, 204, 255),
     "teal_mid": (64, 168, 178, 255),
     "teal_dk": (48, 140, 150, 255),
     "deep": (30, 96, 106, 255),
-    "deep2": (20, 64, 76, 255),
+    "deep2": (18, 62, 80, 255),  # deep shadow pulls blue, not just dark
     "trail": (24, 66, 76, 255),
     "rim": (224, 246, 250, 255),
 }
+
+WISP_FAMILIES = (
+    (WISP_PAL["deep2"], WISP_PAL["deep"], WISP_PAL["teal_dk"], WISP_PAL["teal_mid"],
+     WISP_PAL["teal"], WISP_PAL["teal_lt"], WISP_PAL["pale"], WISP_PAL["white"]),
+)
 
 
 def draw_wisp(f):
@@ -782,6 +936,7 @@ def draw_wisp(f):
     dx, dy = f["dx"], f["dy"]
     pulse, halo, streak, trail_n = f["pulse"], f["halo"], f["streak"], f["trail"]
     stretch = f.get("stretch", 0)
+    tick = f.get("tick", 0)  # idle-cycle phase: spark/trail micro-motion
     cx = 28 + dx
     cy = 26 + dy
     # trailing wisp chain (shrinks while dashing), each orb its own ramp
@@ -828,13 +983,17 @@ def draw_wisp(f):
     # ambient glow halo (dither ring, pulses on idle)
     glow_ring(px, 64, 64, cx, cy, rx + 2, rx + 5 + pulse, P["teal_dk"], 3 + pulse)
     glow_ring(px, 64, 64, cx, cy, rx + 5 + pulse, rx + 8 + pulse, P["deep2"], 2 + pulse)
-    # idle life: tiny sparks rising off the flame crown
+    # idle life: tiny sparks rising off the flame crown (tick drifts them)
     if not halo and not streak:
         for k in range(3):
-            sx = cx - 4 + k * 4 + pulse
-            sy = cy - ry - 6 - (k * 5 + pulse * 3) % 7
+            sx = cx - 4 + k * 4 + pulse + (tick & 1)
+            sy = cy - ry - 6 - (k * 5 + pulse * 3 + tick * 2) % 7
             if 0 <= sx < 64 and 0 <= sy < 64 and px[sx, sy][3] == 0:
-                px[sx, sy] = P["pale"] if k % 2 else P["teal_lt"]
+                px[sx, sy] = P["pale"] if (k + tick) % 2 else P["teal_lt"]
+        if tick:  # a stray mote drifting wide of the orb
+            mx, my = cx + rx + 3 + tick, cy - 2 - tick * 3
+            if 0 <= mx < 64 and 0 <= my < 64 and px[mx, my][3] == 0:
+                px[mx, my] = P["teal_lt"] if tick == 1 else P["teal_dk"]
     # cast rings + sparkles
     if halo:
         hr = rx + 3 + halo * 3
@@ -851,21 +1010,26 @@ def draw_wisp(f):
             px[sx + 1, sy] = P["pale"]
             px[sx, sy - 1] = P["pale"]
             px[sx, sy + 1] = P["pale"]
-    return t
+    return aa_pass(t, WISP_FAMILIES)
 
 
 def gen_wisp():
+    """M11: 9 frames — the idle grows to a 4-frame breathing loop
+    (0 rest, 1 swell, 2 peak, 3 settle — tick varies the spark drift so
+    1/3 differ); cast shifts to 4,5 and the dash attack to 6,7,8."""
     frames = [
-        # dx, dy, pulse, halo, streak, trail, stretch
+        # dx, dy, pulse, halo, streak, trail, stretch, tick
         dict(dx=0, dy=0, pulse=0, halo=0, streak=0, trail=3),
+        dict(dx=0, dy=1, pulse=1, halo=0, streak=0, trail=3, tick=1),
         dict(dx=0, dy=2, pulse=2, halo=0, streak=0, trail=3),
+        dict(dx=0, dy=1, pulse=1, halo=0, streak=0, trail=3, tick=2),
         dict(dx=0, dy=0, pulse=1, halo=1, streak=0, trail=3),
         dict(dx=0, dy=-1, pulse=2, halo=2, streak=0, trail=3),
         dict(dx=5, dy=0, pulse=1, halo=0, streak=1, trail=2, stretch=2),
         dict(dx=14, dy=1, pulse=1, halo=0, streak=2, trail=1, stretch=4),
         dict(dx=22, dy=0, pulse=2, halo=0, streak=3, trail=0, stretch=2),
     ]
-    img = new_img(448, 64)
+    img = new_img(576, 64)
     for i, f in enumerate(frames):
         img.paste(draw_wisp(f), (i * 64, 0))
     return img
@@ -958,9 +1122,16 @@ def rev_robe(t, d, x, y, P, sway=0):
         t.putpixel((mx + 1, my - (k % 2)), P["rot"])
 
 
+REV_FAMILIES = (
+    (REV_PAL["cloth_deep"], REV_PAL["cloth_dk"], REV_PAL["cloth"], REV_PAL["cloth_lt"], REV_PAL["cloth_hi"]),
+    (REV_PAL["bone_dk"], REV_PAL["bone"], REV_PAL["bone_lt"], REV_PAL["bone_hi"]),
+    (REV_PAL["eye_dk"], REV_PAL["eye"]),
+)
+
+
 def _rev_rim(t):
     P = REV_PAL
-    return rim_light(
+    rim_light(
         t,
         {
             P["cloth"]: P["rim"],
@@ -971,6 +1142,9 @@ def _rev_rim(t):
             P["bone_lt"]: P["bone_hi"],
         },
     )
+    # cold grave-light bounce creeping up the shadowed hem
+    bounce_light(t, {P["cloth_deep"]: P["cloth_dk"], P["cloth_dk"]: P["cloth"], P["bone_dk"]: P["bone"]})
+    return aa_pass(t, REV_FAMILIES)
 
 
 def draw_revenant(f):
@@ -1063,22 +1237,38 @@ def gen_revenant():
 #   7,8,9 uncloaked attack · 10,11 breath tell · 12,13,14 flame breath
 
 CHIMERA_PAL = {
+    "cloak_dp": (32, 34, 54, 255),   # deep shroud shadow, blue-violet
     "cloak_dk": (44, 48, 64, 255),
     "cloak": (58, 63, 82, 255),
-    "cloak_lt": (78, 84, 106, 255),
+    "cloak_lt": (80, 86, 108, 255),
     "bone": (200, 192, 168, 255),
+    "tawny_dp": (72, 44, 48, 255),   # hide shadow pulls cool maroon
     "tawny_dk": (104, 66, 36, 255),
     "tawny": (138, 90, 48, 255),
-    "tawny_lt": (168, 120, 72, 255),
-    "wing_dk": (64, 48, 70, 255),
+    "tawny_lt": (170, 122, 72, 255),
+    "tawny_hi": (204, 158, 100, 255),  # warm-lit crown of the mass
+    "wing_dk": (62, 46, 72, 255),
     "wing": (90, 68, 96, 255),
+    "wing_lt": (120, 94, 126, 255),
+    "scale_dk": (50, 88, 88, 255),
     "scale": (74, 122, 114, 255),
-    "scale_lt": (110, 160, 148, 255),
+    "scale_lt": (112, 162, 148, 255),
     "ember": (240, 160, 48, 255),
+    "fl_dp": (152, 62, 28, 255),     # rust root of the flame ramp
     "fl_or": (232, 120, 40, 255),
     "fl_ye": (248, 216, 88, 255),
     "fl_wh": (255, 248, 232, 255),
 }
+
+CHIMERA_FAMILIES = (
+    (CHIMERA_PAL["cloak_dp"], CHIMERA_PAL["cloak_dk"], CHIMERA_PAL["cloak"], CHIMERA_PAL["cloak_lt"]),
+    (CHIMERA_PAL["tawny_dp"], CHIMERA_PAL["tawny_dk"], CHIMERA_PAL["tawny"],
+     CHIMERA_PAL["tawny_lt"], CHIMERA_PAL["tawny_hi"]),
+    (CHIMERA_PAL["wing_dk"], CHIMERA_PAL["wing"], CHIMERA_PAL["wing_lt"]),
+    (CHIMERA_PAL["scale_dk"], CHIMERA_PAL["scale"], CHIMERA_PAL["scale_lt"]),
+    (CHIMERA_PAL["fl_dp"], CHIMERA_PAL["fl_or"], CHIMERA_PAL["ember"],
+     CHIMERA_PAL["fl_ye"], CHIMERA_PAL["fl_wh"]),
+)
 
 
 def chimera_claws(d, x, y, dir_, P):
@@ -1109,8 +1299,9 @@ def draw_cloaked(f):
         fill=P["cloak"],
         outline=OUTLINE,
     )
-    # shade the right side + hem, light the left
+    # shade the right side + hem, light the left; deep violet in the pits
     dither(px, 58, 26, 78, 88, P["cloak_dk"], 5, only=P["cloak"])
+    dither(px, 64, 40, 78, 88, P["cloak_dp"], 4, ox=1, only=P["cloak_dk"])
     dither(px, 20, 78, 78, 88, P["cloak_dk"], 4, ox=2, only=P["cloak"])
     dither(px, 28, 18, 42, 60, P["cloak_lt"], 2, only=P["cloak"])
     # falling folds — these shift with sway (the cloak "breathes")
@@ -1158,19 +1349,24 @@ def draw_cloaked(f):
     dither(px, 22, 82, 76, 88, OUTLINE, 5, ox=1, only=P["cloak_dk"])
     px[ax - 2, 35] = P["fl_or"]
     px[ax + 5, 34] = P["fl_or"]
-    # rim light along the shroud's lit silhouette
+    px[ax + 1, 36] = P["fl_dp"]  # rust afterglow under the spill
+    # rim light along the shroud's lit silhouette + cool floor bounce
     rim_light(t, {P["cloak"]: P["cloak_lt"], P["cloak_lt"]: P["bone"], P["cloak_dk"]: P["cloak"]})
-    return t
+    bounce_light(t, {P["cloak_dp"]: P["cloak_dk"], P["cloak_dk"]: P["cloak"]})
+    return aa_pass(t, CHIMERA_FAMILIES)
 
 
 def draw_uncloaked(f):
-    """head: 0 normal, 1 pulled back, 2 reared (tell), 3 forward (breath)."""
+    """head: 0 normal, 1 pulled back, 2 reared (tell), 3 forward (breath).
+    wing: 0 low, 1 raised, 2 mid-beat (M11 4-frame idle). tick: idle-cycle
+    micro-motion — tail tuft flicker, mane spike shift, scale glint blink."""
     t = new_img(96, 96)
     d = ImageDraw.Draw(t)
     px = t.load()
     P = CHIMERA_PAL
     dx, wing_up, head = f["dx"], f["wing"], f["head"]
     glow, cone, arc, foreleg = f["glow"], f["cone"], f["arc"], f["foreleg"]
+    tick = f.get("tick", 0)
     bx = 34 + dx
     by = 60
     # ground shadow
@@ -1178,14 +1374,18 @@ def draw_uncloaked(f):
     # tail with a flame tuft (drawn first, behind everything)
     d.line([(bx - 20, by + 2), (bx - 34, by - 10)], fill=P["tawny"], width=3)
     d.line([(bx - 21, by + 3), (bx - 35, by - 9)], fill=P["tawny_dk"], width=1)
+    tf = tick % 2  # tuft flicker phase
     d.polygon(
-        [(bx - 33, by - 9), (bx - 40, by - 13), (bx - 36, by - 16), (bx - 38, by - 20), (bx - 32, by - 15)],
+        [(bx - 33, by - 9), (bx - 40, by - 13), (bx - 36, by - 16 - tf), (bx - 38 + tf, by - 20), (bx - 32, by - 15)],
         fill=P["ember"],
         outline=OUTLINE,
     )
-    px[bx - 36, by - 14] = P["fl_ye"]
+    if bx - 36 >= 0:  # guard: negative x would wrap to the frame's right edge
+        px[bx - 36, by - 14 - tf] = P["fl_ye"]
+    if bx - 34 >= 0:
+        px[bx - 34, by - 11] = P["fl_dp"]  # rust root of the tuft
     # wings: broad membrane fans with ribs and scalloped trailing edges
-    wy = 4 if wing_up else 14
+    wy = (14, 4, 9)[wing_up]
     for side in (0, 1):
         if side == 0:  # far wing, left/back
             root = (bx - 4, by - 12)
@@ -1208,10 +1408,11 @@ def draw_uncloaked(f):
         for tp in tips:
             d.line([root, tp], fill=P["wing_dk"])
         d.line([root, tips[0]], fill=P["bone"])  # leading edge finger catches light
-        # membrane shading toward the trailing edge
+        # membrane shading toward the trailing edge; lit haze near the spar
         lo_x = min(p[0] for p in pts)
         hi_x = max(p[0] for p in pts)
         dither(px, max(0, lo_x), by - 26, min(95, hi_x), by - 12, P["wing_dk"], 5, only=P["wing"])
+        dither(px, max(0, lo_x), wy, min(95, hi_x), wy + 12, P["wing_lt"], 3, ox=side, only=P["wing"])
     # far legs
     for lx in (bx - 16, bx + 10):
         d.rectangle([lx, by + 8, lx + 4, 86], fill=P["tawny_dk"], outline=OUTLINE)
@@ -1219,11 +1420,15 @@ def draw_uncloaked(f):
     d.ellipse([bx - 26, by - 16, bx + 24, by + 16], fill=P["tawny_dk"])
     d.ellipse([bx - 26, by - 16, bx + 22, by + 14], fill=P["tawny"])
     dither(px, bx - 22, by - 15, bx + 6, by - 2, P["tawny_lt"], 6, only=P["tawny"])
+    dither(px, bx - 18, by - 15, bx - 2, by - 9, P["tawny_hi"], 4, ox=1, only=P["tawny_lt"])
     d.ellipse([bx - 26, by - 16, bx + 24, by + 16], outline=OUTLINE)
     d.ellipse([bx - 23, by - 5, bx - 3, by + 14], fill=P["tawny"])
     d.arc([bx - 23, by - 5, bx - 3, by + 14], 40, 200, fill=P["tawny_dk"])
     d.ellipse([bx - 20, by - 2, bx - 10, by + 7], fill=P["tawny_lt"])
+    px[bx - 17, by] = P["tawny_hi"]  # haunch crown catch
+    px[bx - 16, by + 1] = P["tawny_hi"]
     dither(px, bx - 24, by + 6, bx + 22, by + 15, P["tawny_dk"], 6, only=P["tawny"])
+    dither(px, bx - 24, by + 10, bx + 22, by + 15, P["tawny_dp"], 5, ox=2, only=P["tawny_dk"])
     # near legs with bone claws
     for k, lx in enumerate((bx - 20, bx + 14)):
         up = 8 if (foreleg and k == 1) else 0
@@ -1234,6 +1439,7 @@ def draw_uncloaked(f):
     # secondary head: scaled serpent neck + wedge head with open jaw (teal)
     d.line([(bx + 2, by - 12), (bx + 7, by - 24)], fill=P["scale"], width=5)
     dither(px, bx - 1, by - 24, bx + 10, by - 12, P["scale_lt"], 5, only=P["scale"])
+    dither(px, bx + 3, by - 18, bx + 10, by - 12, P["scale_dk"], 5, ox=1, only=P["scale"])
     d.ellipse([bx + 1, by - 34, bx + 13, by - 24], fill=P["scale"], outline=OUTLINE)
     d.polygon(
         [(bx + 11, by - 32), (bx + 20, by - 30), (bx + 12, by - 27)],
@@ -1257,15 +1463,20 @@ def draw_uncloaked(f):
     d.line([(bx + 14, by - 10), (hx - 2, hy + 8)], fill=P["tawny"], width=7)
     d.line([(bx + 17, by - 6), (hx + 1, hy + 10)], fill=P["tawny_dk"], width=2)
     d.line([(bx + 11, by - 12), (hx - 4, hy + 6)], fill=P["tawny_lt"], width=2)
-    # ember mane (it owns fire): spiked ring of flame around the head
+    # ember mane (it owns fire): spiked ring of flame around the head;
+    # tick makes alternate spikes reach — the mane licks in the idle loop
     for mk in range(7):
         ang_x = (-14, -16, -13, -6, 2, -12, -4)[mk]
         ang_y = (-6, 2, -13, -16, -15, 10, 13)[mk]
-        sx, sy = hx + ang_x, hy + ang_y
+        reach = 1 if (mk + tick) % 3 == 0 and tick else 0
+        sx = hx + ang_x + (reach if ang_x > 0 else -reach)
+        sy = hy + ang_y + (reach if ang_y > 0 else -reach)
         d.polygon(
             [(hx - 2, hy), (sx + 3, sy + 3), (sx - 1, sy - 2)],
             fill=P["ember"],
         )
+        if reach and 0 <= sx < 96 and 0 <= sy < 96:
+            px[sx, sy] = P["fl_ye"]  # hot tip on the reaching spike
     d.ellipse([hx - 12, hy - 12, hx + 8, hy + 12], fill=P["ember"], outline=OUTLINE)
     dither(px, hx - 12, hy - 12, hx + 8, hy + 12, P["fl_or"], 5, only=P["ember"])
     # face: broad skull, short muzzle, heavy brow
@@ -1315,26 +1526,32 @@ def draw_uncloaked(f):
         for s in range(3):
             sy = by - 18 + s * 8
             d.line([(bx - 46, sy), (bx - 32, sy)], fill=P["bone"])
-    # scale glints on the haunch + deep belly shade (richer ramp work)
+    # scale glints on the haunch + deep belly shade (glints blink with tick)
     dither(px, bx - 24, by + 8, bx + 20, by + 15, OUTLINE, 3, ox=2, only=P["tawny_dk"])
     for k, (gx, gy) in enumerate(((bx - 18, by + 2), (bx - 13, by + 5), (bx - 8, by + 1))):
-        px[gx, gy] = P["scale"] if k % 2 else P["scale_lt"]
-    # rim light: cool bone catch on the lit silhouette, wings included
+        px[gx, gy] = P["scale"] if (k + tick) % 2 else P["scale_lt"]
+    # rim light: cool bone catch on the lit silhouette, wings included;
+    # then warm ground bounce off the lair floor onto the shadow side
     rim_light(
         t,
         {
             P["tawny"]: P["tawny_lt"],
             P["tawny_lt"]: P["bone"],
             P["tawny_dk"]: P["tawny"],
-            P["wing"]: P["cloak_lt"],
+            P["wing"]: P["wing_lt"],
             P["wing_dk"]: P["wing"],
             P["scale"]: P["scale_lt"],
         },
     )
-    return t
+    bounce_light(t, {P["tawny_dp"]: P["tawny_dk"], P["tawny_dk"]: P["tawny"], P["wing_dk"]: P["wing"]})
+    return aa_pass(t, CHIMERA_FAMILIES)
 
 
 def gen_chimera():
+    """M11: 17 frames — uncloaked idle grows to a 4-frame wing-beat loop
+    (frames 5-8: raised / mid-beat / low / mid-beat, tick varying the tail
+    tuft, mane licks and scale glints so the two mid frames differ). Attack
+    9-11, tell 12-13, breath 14-16."""
     cloaked = [
         dict(sway=0, limb=0, arc=0),
         dict(sway=2, limb=0, arc=0),
@@ -1344,7 +1561,9 @@ def gen_chimera():
     ]
     uncloaked = [
         dict(dx=0, wing=1, head=0, glow=0, cone=0, arc=0, foreleg=0),
+        dict(dx=0, wing=2, head=0, glow=0, cone=0, arc=0, foreleg=0, tick=1),
         dict(dx=0, wing=0, head=0, glow=0, cone=0, arc=0, foreleg=0),
+        dict(dx=0, wing=2, head=0, glow=0, cone=0, arc=0, foreleg=0, tick=2),
         dict(dx=-4, wing=0, head=1, glow=0, cone=0, arc=0, foreleg=1),
         dict(dx=8, wing=1, head=0, glow=0, cone=0, arc=1, foreleg=0),
         dict(dx=3, wing=0, head=0, glow=0, cone=0, arc=0, foreleg=0),
@@ -1354,7 +1573,7 @@ def gen_chimera():
         dict(dx=-8, wing=0, head=3, glow=0, cone=2, arc=0, foreleg=0),
         dict(dx=-8, wing=1, head=3, glow=0, cone=3, arc=0, foreleg=0),
     ]
-    img = new_img(1440, 96)
+    img = new_img(1632, 96)
     for i, f in enumerate(cloaked):
         img.paste(draw_cloaked(f), (i * 96, 0))
     for j, f in enumerate(uncloaked):
@@ -1685,8 +1904,9 @@ def _heart_hit(x, y, s):
 def _flame_depth(x, y, s, phase=0):
     """> 0 inside a flame lick; magnitude = design-px distance to its edge.
     A wobbling main tongue rising from the notch plus two side licks.
-    `phase` rotates the wobble table and re-leans the side licks — the M10
-    emberheart sprite's second flicker frame; phase 0 is the icon art."""
+    `phase` rotates the wobble table and re-leans the side licks. Phases
+    0/1 are the M10 icon/flicker pair (byte-stable — the PWA icons build on
+    phase 0); phases 2/3 extend the cycle for the M11 4-frame sprite."""
     X = (x - 15.5) / s
     Y = (y - 15.5) / s
     best = 0.0
@@ -1694,7 +1914,7 @@ def _flame_depth(x, y, s, phase=0):
         k = (Y + 13.5) / 9.5
         wob = (0.15, 0.9, -0.6)[(int(-Y) + phase) % 3]
         best = max(best, 0.6 + 3.1 * k - abs(X - wob * (1 - k)))
-    lean = 0.35 * phase
+    lean = (0.0, 0.35, -0.25, 0.15)[phase]
     if -9.5 <= Y <= -5.0:
         best = max(best, 0.4 + 1.4 * (Y + 9.5) / 4.5 - abs(X + 5.2 - lean))
     if -10.5 <= Y <= -5.5:
@@ -1764,16 +1984,20 @@ def emberheart_art(s=1.0, phase=0):
                     c = P["deep"]
                     break
             px[x, y] = c
-    # drifting sparks (design offsets scale with the art; on the flicker
-    # phase they drift one design-px upward and the hottest one blinks)
-    sparks = (
-        (-11.5, -6.0, "ember_lt"), (10.2, -7.6, "white"), (13.0, 1.5, "ember"),
-        (-12.8, 3.5, "ember"), (7.6, -10.6, "ember_lt"),
-    ) if phase == 0 else (
-        (-11.5, -7.0, "ember"), (10.2, -8.6, "ember_lt"), (13.0, 0.5, "ember"),
-        (-12.8, 2.5, "ember_lt"), (7.6, -11.6, "white"), (0.4, -14.6, "ember"),
+    # drifting sparks (design offsets scale with the art): a 4-phase drift
+    # cycle — phases 0/1 are the M10 tables verbatim (icons stay stable),
+    # 2/3 carry the motes higher before they wink out and respawn low
+    spark_cycle = (
+        ((-11.5, -6.0, "ember_lt"), (10.2, -7.6, "white"), (13.0, 1.5, "ember"),
+         (-12.8, 3.5, "ember"), (7.6, -10.6, "ember_lt")),
+        ((-11.5, -7.0, "ember"), (10.2, -8.6, "ember_lt"), (13.0, 0.5, "ember"),
+         (-12.8, 2.5, "ember_lt"), (7.6, -11.6, "white"), (0.4, -14.6, "ember")),
+        ((-11.5, -8.0, "ember"), (10.2, -9.6, "ember"), (13.0, -0.5, "ember_lt"),
+         (-12.8, 1.5, "ember"), (7.6, -12.6, "ember_lt"), (0.4, -13.6, "white")),
+        ((-11.5, -5.0, "ember"), (10.2, -6.6, "ember_lt"), (13.0, 2.5, "white"),
+         (-12.8, 4.5, "ember_lt"), (7.6, -9.6, "ember"), (-0.6, -14.1, "ember_lt")),
     )
-    for dx_, dy_, key in sparks:
+    for dx_, dy_, key in spark_cycle[phase]:
         sx = int(round(15.5 + dx_ * s))
         sy = int(round(15.5 + dy_ * s))
         if 0 <= sx < 32 and 0 <= sy < 32 and px[sx, sy][3] == 0:
@@ -1826,16 +2050,33 @@ def gen_apple_icon():
 
 
 # ---------------------------------------------------------------------------
-# 6b. Emberheart sprite (M10) — 64x32, 2 frames 32x32 on transparency for
-#     the Victory relight beat: frame 0 is the PWA icon key art itself
-#     (pixel-identical, asserted below), frame 1 the flicker phase (flame
-#     wobble rotated, sparks drifted, hot spark blinking).
+# 6b. Emberheart sprite (M11) — 128x32, FOUR 32x32 burn frames for the
+#     Victory relight beat. Each frame is the icon key art re-lit at the
+#     modern budget: soft AA over the ember ramp + a breathing warm glow
+#     halo. The PWA icons keep the original 5-color art untouched; frame 0
+#     therefore shares the icon's opaque silhouette (asserted below), not
+#     its exact pixels (M11 amendment, ART_BIBLE §2).
+
+EMBER_FAMILY = (
+    ICON_PAL["deep"], ICON_PAL["ember_dk"], ICON_PAL["ember"],
+    ICON_PAL["ember_lt"], ICON_PAL["white"],
+)
+
+
+def emberheart_frame(phase):
+    t = emberheart_art(phase=phase)
+    px = t.load()
+    # warm halo breathing with the flame (2-level quantized alpha)
+    r0 = 13 + (phase % 2)
+    glow_ring(px, 32, 32, 16, 16, r0, r0 + 2, (232, 120, 40, 96), 4)
+    glow_ring(px, 32, 32, 16, 16, r0 + 2, r0 + 4, (168, 64, 24, 64), 3)
+    return aa_pass(t, (EMBER_FAMILY,))
 
 
 def gen_emberheart():
-    img = new_img(64, 32)
-    img.paste(emberheart_art(), (0, 0))
-    img.paste(emberheart_art(phase=1), (32, 0))
+    img = new_img(128, 32)
+    for i in range(4):
+        img.paste(emberheart_frame(i), (i * 32, 0))
     return img
 
 
@@ -1854,18 +2095,39 @@ def check(cond, msg):
         sys.exit(1)
 
 
+# M11 palette budgets (GDD row 11 / ART_BIBLE §2): the SNES 16-color cap is
+# retired. Sprites <= 48 colors per sheet; backdrops + full-screen fx
+# overlays <= 96; tileset master pool <= 64 with <= 24 per 16x16 tile.
+SPRITE_COLOR_CAP = 48
+BACKDROP_COLOR_CAP = 96
+TILE_POOL_CAP = 64
+TILE_COLOR_CAP = 24
+OVERLAY_ALPHA_CAP = 200  # screen-blend overlays must stay translucent
+
 # Sheets allowed to exceed the 96px frame-height rule: battle backdrops are
-# full 256x144 scenes, and the v2 tileset is a 128px-tall grid of 16px
-# tiles, not sprite frames. (CI's source-asset-lint only enforces the
-# divisible-by-16 grid, which both satisfy — verified against
-# .github/workflows/ci.yml.)
+# full 256x144 scenes, the v2 tileset is a 128px-tall grid of 16px tiles,
+# and the fx-* strips are full-screen overlay layers, not sprite frames.
+# (CI's source-asset-lint only enforces the divisible-by-16 grid, which all
+# satisfy — verified against .github/workflows/ci.yml.)
 H96_EXEMPT = ("backdrops", "tilesets")
+
+
+def _is_backdrop_class(path):
+    """Backdrop-budget files: backdrops/ plus the fx-* overlay strips."""
+    return (
+        any(os.sep + e + os.sep in path for e in ("backdrops",))
+        or os.path.basename(path).startswith("fx-")
+    )
+
 
 REQUIRED_MANIFEST_IDS = (
     "enemy.spider", "enemy.wisp", "enemy.revenant", "enemy.chimera",
     "enemy.minis", "hero.overworld", "backdrop.forest", "backdrop.marsh",
-    "backdrop.ruin", "backdrop.lair", "ui.panel", "ui.touch", "tile.anim",
-    "chest", "npc.keeper", "fx.emberheart",
+    "backdrop.ruin", "backdrop.lair", "backdrop.forest.far",
+    "backdrop.forest.near", "backdrop.marsh.far", "backdrop.marsh.near",
+    "backdrop.ruin.far", "backdrop.ruin.near", "backdrop.lair.far",
+    "backdrop.lair.near", "fx.shafts", "fx.fog", "ui.panel", "ui.touch",
+    "tile.anim", "chest", "npc.keeper", "fx.emberheart",
 )
 
 
@@ -1875,25 +2137,62 @@ def self_check(generated):
         w, h = img.size
         rel = os.path.relpath(path, ROOT)
         check(w % 16 == 0 and h % 16 == 0, f"{path}: {w}x{h} not divisible by 16")
-        exempt = any(os.sep + e + os.sep in path for e in H96_EXEMPT)
+        exempt = (
+            any(os.sep + e + os.sep in path for e in H96_EXEMPT)
+            or os.path.basename(path).startswith("fx-")
+        )
         check(exempt or h <= 96, f"{path}: frame height exceeds 96")
         if path.endswith(os.path.join("tilesets", "overworld.png")):
             check((w, h) == (256, 128), f"{path}: tileset must be 256x128, got {w}x{h}")
-            # per-tile <= 16 colors, master pool <= 32 on the sheet
+            # M11 budgets: per-tile <= 24 colors, master pool <= 64
             used = 0
             for i in range(tileset_v2.TILECOUNT):
                 cx, cy = (i % 16) * 16, (i // 16) * 16
                 tile = img.crop((cx, cy, cx + 16, cy + 16))
                 cols = unique_colors(tile)
-                check(len(cols) <= 16, f"{path} tile {i}: {len(cols)} unique colors (> 16)")
+                check(
+                    len(cols) <= TILE_COLOR_CAP,
+                    f"{path} tile {i}: {len(cols)} unique colors (> {TILE_COLOR_CAP})",
+                )
                 used += bool(cols)
             total = len(unique_colors(img))
-            check(total <= 32, f"{path}: {total} colors exceed the 32-color master pool")
-            print(f"  ok {rel}  {w}x{h}  {used} tiles used, sheet pool {total} colors, per-tile <= 16")
+            check(
+                total <= TILE_POOL_CAP,
+                f"{path}: {total} colors exceed the {TILE_POOL_CAP}-color master pool",
+            )
+            print(
+                f"  ok {rel}  {w}x{h}  {used} tiles used, sheet pool {total} colors,"
+                f" per-tile <= {TILE_COLOR_CAP}"
+            )
         else:
+            cap = BACKDROP_COLOR_CAP if _is_backdrop_class(path) else SPRITE_COLOR_CAP
             n = len(unique_colors(img))
-            check(n <= 16, f"{path}: {n} unique colors (> 16)")
-            print(f"  ok {rel}  {w}x{h}  {n} colors")
+            check(n <= cap, f"{path}: {n} unique colors (> {cap})")
+            print(f"  ok {rel}  {w}x{h}  {n} colors (cap {cap})")
+
+    # M11 parallax pairs: far layers are full opaque 256x144 scenes; near
+    # bands are 256x64 strips whose top rows stay fully transparent (the
+    # parallax seam) with real silhouette content below; both x-seamless by
+    # construction. The fx overlays must stay translucent screen-blend food.
+    for biome in ("forest", "marsh", "ruin", "lair"):
+        far = Image.open(os.path.join(BACKDROPS_DIR, f"{biome}-far.png"))
+        check(far.size == (256, 144), f"{biome}-far.png: {far.size} != (256, 144)")
+        check(far.getchannel("A").getextrema()[0] == 255, f"{biome}-far.png not fully opaque")
+        near = Image.open(os.path.join(BACKDROPS_DIR, f"{biome}-near.png"))
+        check(near.size == (256, 64), f"{biome}-near.png: {near.size} != (256, 64)")
+        top = near.crop((0, 0, 256, 8))
+        check(top.getchannel("A").getextrema()[1] == 0, f"{biome}-near.png top rows not transparent")
+        check(near.getchannel("A").getextrema()[1] == 255, f"{biome}-near.png has no solid content")
+        print(f"  ok backdrops/{biome}-far+near  parallax pair (near top clear)")
+    for name, size in (("fx-shafts.png", (256, 144)), ("fx-fog.png", (256, 64))):
+        ov = Image.open(os.path.join(SPRITES, name))
+        check(ov.size == size, f"{name}: {ov.size} != {size}")
+        amax = ov.getchannel("A").getextrema()[1]
+        check(0 < amax <= OVERLAY_ALPHA_CAP, f"{name}: alpha peak {amax} outside (0, {OVERLAY_ALPHA_CAP}]")
+        top = ov.crop((0, 0, 256, 4))
+        check(top.getchannel("A").getextrema()[1] == 0 if name == "fx-fog.png" else True,
+              f"{name}: fog top rows must be transparent")
+        print(f"  ok {name}  translucent overlay (alpha peak {amax})")
 
     # hero sheet: 128x48, 8 distinct 16x24 frames on the top row, bottom
     # frame row fully transparent (sheet padded to the CI 16px grid)
@@ -1937,17 +2236,36 @@ def self_check(generated):
     check(kpad.getchannel("A").getextrema()[1] == 0, "npc-keeper pad row not transparent")
     print("  ok npc-keeper.png  2 distinct 16x24 idle frames, lantern lit, pad row clear")
 
-    # M10 emberheart: frame 0 pixel-identical to the PWA icon key art,
-    # frame 1 a distinct flicker phase
+    # M11 emberheart: 4 distinct burn frames; frame 0 keeps the PWA icon's
+    # OPAQUE silhouette exactly (the icons themselves stay untouched at the
+    # M10 art — the sprite re-lights the same key art at the modern budget)
     emb = Image.open(os.path.join(SPRITES, "emberheart.png"))
-    check(emb.size == (64, 32), f"emberheart.png: {emb.size} != (64, 32)")
-    ef = [emb.crop((i * 32, 0, i * 32 + 32, 32)) for i in range(2)]
-    check(
-        ef[0].tobytes() == emberheart_art().tobytes(),
-        "emberheart frame 0 != the PWA icon key art",
-    )
-    check(ef[0].tobytes() != ef[1].tobytes(), "emberheart frames identical (no flicker)")
-    print("  ok emberheart.png  frame 0 matches the icon key art, flicker frame distinct")
+    check(emb.size == (128, 32), f"emberheart.png: {emb.size} != (128, 32)")
+    ef = [emb.crop((i * 32, 0, i * 32 + 32, 32)) for i in range(4)]
+    solid = ef[0].getchannel("A").point(lambda v: 255 if v == 255 else 0)
+    icon_solid = emberheart_art().getchannel("A").point(lambda v: 255 if v == 255 else 0)
+    check(solid.tobytes() == icon_solid.tobytes(), "emberheart frame 0 silhouette != icon key art")
+    for a in range(4):
+        check(ef[a].getchannel("A").getextrema()[1] > 0, f"emberheart frame {a} is empty")
+        for b in range(a + 1, 4):
+            check(ef[a].tobytes() != ef[b].tobytes(), f"emberheart frames {a}/{b} identical")
+    print("  ok emberheart.png  4 distinct burn frames, icon silhouette kept")
+
+    # M11 anim extensions: wisp idle is a 4-frame breathing loop, chimera's
+    # uncloaked idle a 4-frame wing beat — all frames pairwise distinct
+    wisp = Image.open(os.path.join(SPRITES, "wisp.png"))
+    check(wisp.size == (576, 64), f"wisp.png: {wisp.size} != (576, 64)")
+    wf = [wisp.crop((i * 64, 0, i * 64 + 64, 64)).tobytes() for i in range(9)]
+    for a in range(9):
+        for b in range(a + 1, 9):
+            check(wf[a] != wf[b], f"wisp frames {a}/{b} identical")
+    chim = Image.open(os.path.join(SPRITES, "chimera.png"))
+    check(chim.size == (1632, 96), f"chimera.png: {chim.size} != (1632, 96)")
+    cfr = [chim.crop((i * 96, 0, i * 96 + 96, 96)).tobytes() for i in range(17)]
+    for a in range(17):
+        for b in range(a + 1, 17):
+            check(cfr[a] != cfr[b], f"chimera frames {a}/{b} identical")
+    print("  ok wisp.png 9 frames / chimera.png 17 frames, all distinct (M11 idle extensions)")
 
     # minis: frames 0-6 non-empty, idle pairs distinct, frame 7 clear,
     # shadow blob (frame 6) soft — its darkest pixel stays translucent
@@ -2022,6 +2340,13 @@ def self_check(generated):
         manifest = json.load(f)
     for rid in REQUIRED_MANIFEST_IDS:
         check(rid in manifest, f"art-manifest missing required id '{rid}'")
+    # M11 landing-race guard: the legacy backdrop key aliases the far layer
+    # until the Engine lane consumes the parallax pair directly
+    for biome in ("forest", "marsh", "ruin", "lair"):
+        check(
+            manifest[f"backdrop.{biome}"]["file"] == manifest[f"backdrop.{biome}.far"]["file"],
+            f"backdrop.{biome} must alias the -far file (Engine landing-race guard)",
+        )
     for key, entry in manifest.items():
         p = os.path.join(PUB, entry["file"])
         check(os.path.isfile(p), f"art-manifest '{key}' -> {entry['file']} missing under public/")
@@ -2101,8 +2426,12 @@ def main():
         os.path.join(SPRITES, "ui-touch.png"): gen_ui_touch,
         os.path.join(FONTS, "font.png"): pixelfont.build_font_png,
     }
-    for name, fn in gen_backdrops.BACKDROPS.items():
-        outputs[os.path.join(BACKDROPS_DIR, f"{name}.png")] = fn
+    for name, fn in gen_backdrops.FAR.items():
+        outputs[os.path.join(BACKDROPS_DIR, f"{name}-far.png")] = fn
+    for name, fn in gen_backdrops.NEAR.items():
+        outputs[os.path.join(BACKDROPS_DIR, f"{name}-near.png")] = fn
+    outputs[os.path.join(SPRITES, "fx-shafts.png")] = gen_backdrops.fx_shafts
+    outputs[os.path.join(SPRITES, "fx-fog.png")] = gen_backdrops.fx_fog
     for path, gen in outputs.items():
         gen().save(path)
         print(f"wrote {os.path.relpath(path, ROOT)}")

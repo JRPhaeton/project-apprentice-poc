@@ -13,7 +13,14 @@ import { animateEvents, createEnemyViews, type BattleView } from '../systems/bat
 import { MenuList } from '../systems/battle-menu';
 import type { GameDefs } from '../systems/content';
 import { runEnemyPhase } from '../systems/enemy-phase';
-import { backdropKeyFor, playBattleEntry, playVictoryFlash } from '../systems/fx';
+import {
+    addBattleBackdrop,
+    backdropSpecFor,
+    playBattleEntry,
+    playVictoryFlash,
+    type BackdropSpec
+} from '../systems/fx';
+import { applyGrade, battleGradeFor } from '../systems/grade';
 import { markOutcome, markScene } from '../systems/hooks';
 import { getInputBus } from '../systems/input-bus';
 import { dur, toggleSpeed } from '../systems/pacing';
@@ -36,7 +43,7 @@ export class Battle extends Phaser.Scene {
     private targetTapIds: string[] = [];
     private freeActionUsed = false;
     private ended = false;
-    private backdropKey = '';
+    private backdropSpec!: BackdropSpec;
 
     constructor() {
         super('Battle');
@@ -86,7 +93,10 @@ export class Battle extends Phaser.Scene {
         const artIds = this.defs.encounters[this.request.encounterId].enemies.map(
             (defId) => this.defs.enemies[defId].artId
         );
-        this.backdropKey = backdropKeyFor(
+        // M11 parallax pair: far/near layers + biome atmosphere sheet ride
+        // the same lazy batch (old single-backdrop key is the far fallback).
+        this.backdropSpec = backdropSpecFor(
+            this.defs.art,
             this.reg.get('room'),
             this.defs.encounters[this.request.encounterId].boss
         );
@@ -94,7 +104,13 @@ export class Battle extends Phaser.Scene {
         for (const artId of artIds) {
             queueSheet(this.load, this.defs.art, artId);
         }
-        queueSheet(this.load, this.defs.art, this.backdropKey);
+        queueSheet(this.load, this.defs.art, this.backdropSpec.farKey);
+        if (this.backdropSpec.nearKey) {
+            queueSheet(this.load, this.defs.art, this.backdropSpec.nearKey);
+        }
+        if (this.backdropSpec.overlayKey) {
+            queueSheet(this.load, this.defs.art, this.backdropSpec.overlayKey);
+        }
         if (this.defs.encounters[this.request.encounterId].boss) {
             // M10: the Victory relight beat's Emberheart sprite — boss
             // battles are the only road to Victory, so it rides this batch.
@@ -126,12 +142,16 @@ export class Battle extends Phaser.Scene {
             this,
             this.defs.encounters[this.request.encounterId].boss ? 'music.boss' : 'music.battle'
         );
-        // M6 presentation: biome backdrop behind the enemies (missing file →
-        // the dark base rect), then the shutter-bar entry transition on top.
-        if (this.textures.exists(this.backdropKey)) {
-            this.add.image(128, 72, this.backdropKey).setDepth(1);
+        // M6 presentation → M11 modern-2D: biome-graded camera, parallax
+        // backdrop pair + atmosphere overlay (missing files → the dark base
+        // rect), then the upgraded entry transition (shutters + zoom breath +
+        // flash + backdrop bloom spike; turbo → instant, no zoom).
+        const grade = battleGradeFor(this.backdropSpec.biome);
+        if (grade) {
+            applyGrade(this, grade);
         }
-        playBattleEntry(this);
+        const far = addBattleBackdrop(this, this.backdropSpec);
+        playBattleEntry(this, far);
         const hero = this.reg.get('hero');
         this.state = createBattle(this.request.encounterId, hero, this.request.seed, {
             enemies: this.defs.enemies,

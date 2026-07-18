@@ -1,5 +1,5 @@
 # Art Bible — Trial of the Apprentice
-**STATUS: LOCKED (M3, 2026-07-17).** Per PLAN §9, M4 generation now runs against this locked bible: sprite dimensions (overworld 16 / mob 64 / boss 96), per-animation frame counts, and the loop/seam convention below are fixed. Changes require an orchestrator-approved GDD amendment.
+**STATUS: LOCKED (M3, 2026-07-17; palette section rewritten M11, 2026-07-18 per GDD amendment row 11).** Per PLAN §9, generation runs against this locked bible: sprite dimensions (overworld 16 / mob 64 / boss 96), per-animation frame counts, and the loop/seam convention below are fixed. Changes require an orchestrator-approved GDD amendment.
 
 ## 1. Grid & Dimensions (from PLAN §2, canonical)
 
@@ -16,17 +16,33 @@
   - **Gate Keeper npc is 16×24** (hero proportions), 2-frame idle sway on a 32×48 sheet — top row only, bottom frame row transparent for the CI 16px grid — manifest `npc.keeper`, anim `idle` [0,1] @2 loop. Older robed figure in desaturated warm greys + bone beard; his lantern carries the warm ember dot (§2 names the Keeper's lantern a warm-accent element).
   - **Emberheart is 32×32**, 2-frame flicker on a 64×32 sheet — manifest `fx.emberheart`, anim `burn` [0,1] @4 loop, for the Victory relight beat. Frame 0 is pixel-identical to the PWA icon key art (generator self-check).
   - Maps still regenerate ONLY via `tools/gen_maps.py`; its assertion policy is amended exactly this far: collide grid still byte-equal to v1; all pre-M10 objects present verbatim IN ORDER as the layer prefix; the `tools/room_extras.py` extras (7 chests + the room1 Keeper npc) appended at the tail with fresh sequential ids; every extra-covered cell asserted walkable (non-collide ground) and non-overlapping with every pre-M10 object rect.
+- **M11 amendment ("Modern 2D", per the approved M11 plan + GDD row 11):** all dims and frame sizes unchanged; three anims gain frames and the backdrops split into parallax pairs:
+  - **Marsh Wisp battle idle 2→4 frames** (breathing loop): sheet 576×64, 9 frames — `idle` [0,1,2,3] @8, `cast` [4,5] @8, `attack` [6,7,8] @12.
+  - **Chimera `uncloaked.idle` 2→4 frames** (wing-beat loop): sheet 1632×96, 17 frames — cloaked group unchanged [0..4]; `uncloaked.idle` [5,6,7,8] @8, `uncloaked.attack` [9,10,11], `uncloaked.tell` [12,13], `uncloaked.breath` [14,15,16].
+  - **Emberheart `burn` 2→4 frames**: sheet 128×32 — `burn` [0,1,2,3] @8. Frame 0 keeps the PWA icon's opaque silhouette (self-check); the icons themselves stay M10 art.
+  - **Backdrops become parallax pairs** per biome: manifest `backdrop.<biome>.far` (256×144 full scene) + `backdrop.<biome>.near` (256×64 band, transparent top, x-seamless, engine drifts it ±4px); the legacy `backdrop.<biome>` key ALIASES the -far file until the Engine lane consumes the pairs (landing-race guard, self-checked). New overlay strips `fx.shafts` (256×144) and `fx.fog` (256×64), screen-blend-ready.
 - **Battle mobs: 64×64** (4×4 tiles) — Vale Spider, Marsh Wisp, Revenant.
 - **Boss: 96×96** (6×6 tiles) — Cloaked Chimera. No sprite/tileset frame may exceed 96×96 (asset-lint).
 - Internal resolution 256×224, camera shows 16×14 tiles. Compose battle layouts against that frame.
 - Spritesheets exported via Aseprite CLI (scripted); manifest-driven (`art-manifest.json` carries `frameWidth/Height` + anim defs), so the M4 placeholder→final swap is a pure data diff. Keep the logical IDs from day one: `hero`, `enemy.spider`, `enemy.wisp`, `enemy.revenant`, `enemy.chimera`, plus tileset/UI IDs.
 
-## 2. Palette Rules
+## 2. Palette Rules (M11 "Modern 2D" — GDD amendment row 11)
 
-- **≤ 16 colors per sprite/sheet** (asset-lint blocks merge; pngquant quantize + palette-count verify per PLAN §6).
-- **Master palette direction (draft):** desaturated dusk — cool blue-gray environment ramps (stone, marsh water, twilight sky), muted forest greens, with a single **warm ember accent** (amber/orange) reserved for hope-coded elements: the hero's trim, save/interaction glints, the Keeper's lantern, victory UI. Enemies skew cold (violet/teal/bone). This is the "hopeful yet sad" tone in color: cold world, warm hero.
-- Shared dark outline color (near-black blue, not pure black) across all battle sprites for cohesion against dark backdrops.
-- Build one master pool (~32 colors) at M3 lock; each sprite draws its ≤ 16 from that pool. Until lock, placeholders (Kenney CC0 etc.) are exempt from palette direction but not from the ≤ 16 count.
+The SNES-authentic ≤ 16-color/4bpp cap (M3–M10) is **retired**. M11 moves the game to the modern-2D register (Chained Echoes reference): high-color pixel art on the unchanged 16×16 grid. The caps live in the GENERATOR self-checks (`tools/gen_placeholders.py`) — CI's source-asset-lint still enforces only the 16px grid.
+
+- **Budgets (enforced by generator self-checks):**
+  - Sprite sheets: **≤ 48 unique colors per sheet**.
+  - Tileset: **≤ 64-color master pool** on the sheet, soft cap **≤ 24 colors per 16×16 tile**.
+  - Backdrops + full-screen fx overlay strips (`fx-shafts` / `fx-fog`): **≤ 96 colors per file**; overlays additionally alpha-quantized and translucent (alpha peak ≤ 200, screen-blend-ready).
+- **Modern-pixel signatures (applied everywhere, M11):**
+  - **6–8 step ramps with hue-shifted ends** — shadows shift cool (blue/violet/teal), lights shift warm; never a plain darken/lighten of the same hue.
+  - **Soft interior anti-aliasing** at ramp boundaries (midpoint blends at staircase corners, bounded per ramp family); outlines stay crisp.
+  - **Rim light + bounce light** on sprites (warm top/left key, cool bottom/right bounce); **specular glints** on metal/wet surfaces.
+  - **Texture detail** on tiles: individual two-tone grass blades, bark striations, stone cracks + moss, water depth gradients.
+  - **Painterly backdrops**: multi-stop quantized sky gradients, silhouette layers with rim-lit edges, per-biome parallax pairs (`<biome>-far.png` 256×144 full scene + `<biome>-near.png` 256×64 near band, transparent top, x-seamless).
+- **Master palette direction (unchanged in spirit):** desaturated dusk — cool blue-gray environment ramps, muted forest greens, with the single **warm ember accent** reserved for hope-coded elements: the hero's trim, save/interaction glints, the Keeper's lantern, victory UI, the Chimera's/lair's fire. Enemies skew cold (violet/teal/bone). Cold world, warm hero.
+- Shared dark outline color (near-black blue `#141628`, not pure black) across all battle sprites for cohesion against dark backdrops.
+- **PWA icons are exempt** and keep the M10 16-color key art byte-for-byte; the M11 emberheart sprite re-lights the same art at the modern budget, so its frame 0 keeps the icon's opaque **silhouette** (self-checked) rather than its exact pixels.
 
 ## 3. Animation Frame Counts (per unit, draft — final counts lock at M3)
 
@@ -41,14 +57,14 @@ Convention matches the PLAN §4 manifest example (`idle` [0,1] @4fps loop, `step
 Per unit (battle sprites):
 
 - **Vale Spider (64×64):** `idle` 2, `step` 2 (the tell), `bite` 3. 7 frames.
-- **Marsh Wisp (64×64):** `idle` 2, `tell` 2 (cast flare — precedes/marks Weaken), `attack` 3. 7 frames.
+- **Marsh Wisp (64×64):** `idle` **4** (M11 breathing loop), `tell` 2 (cast flare — precedes/marks Weaken), `attack` 3. 9 frames.
 - **Revenant (64×64):** `idle` 2, `tell` 2, `attack` 3. Revive "reassembles" visual: v0 = `tell` frames reversed + code-side flash/tween, no dedicated frames; dedicated `revive` frames are an M3 lock decision.
 - **Cloaked Chimera (96×96), ONE preloaded sheet, two anim groups** (PLAN §4 — `phaseChanged` switches groups, no mid-battle load):
   - `cloaked.idle` 2, `cloaked.attack` 3
-  - `uncloaked.idle` 2, `uncloaked.tell` 2 (Flame Breath is always telegraphed one full turn ahead), `uncloaked.attack` 3, `uncloaked.breath` 3
+  - `uncloaked.idle` **4** (M11 wing-beat loop), `uncloaked.tell` 2 (Flame Breath is always telegraphed one full turn ahead), `uncloaked.attack` 3, `uncloaked.breath` 3
   - Cloak-off transition: v0 = group switch + screen flash; optional 2-frame `transition` group is an M3 decision. **Storyboard the cloak-off moment before art generation** (PLAN §5.3).
 - **Hero battle sprite (64×64):** `idle` 2, `defend` 2 (readable guard pose — Defend is the core verb, make it unmistakable), `attack` 3.
-- Overworld: hero (16×24, M8) 2-frame walk per facing; patrol minis (16×16) 2-frame idle bob; Keeper npc (16×24, M10) 2-frame idle sway; chest (16×16, M10) closed/open pair; Emberheart fx (32×32, M10) 2-frame flicker.
+- Overworld: hero (16×24, M8) 2-frame walk per facing; patrol minis (16×16) 2-frame idle bob; Keeper npc (16×24, M10) 2-frame idle sway; chest (16×16, M10) closed/open pair; Emberheart fx (32×32) **4-frame burn (M11)**.
 
 ## 4. UI Chrome (draft)
 
@@ -72,4 +88,4 @@ Per PLAN §0/§11 — reviewer checks each box before merge:
 - [ ] No visual resemblance to the source game's **named designs** (characters, monsters, locations) — compare against reference before merge.
 - [ ] No source-game names in filenames, logical IDs, or metadata ("7th Saga", "Elnard", Kamil, Esuna, Olvan, Lux, Valsu, Wilme, Lejes, original location/item names).
 - [ ] Placeholder assets are CC0 (or equivalent) with license recorded in `assets/CREDITS.md`.
-- [ ] Dimensions on-grid (16 multiple, ≤ 96×96), palette ≤ 16 per sheet, logical IDs match `art-manifest.json`.
+- [ ] Dimensions on-grid (16 multiple; frames ≤ 96×96 — backdrop/tileset/fx-overlay strips exempt), palettes within the M11 budgets (§2: 48 sprite / 64+24 tileset / 96 backdrop), logical IDs match `art-manifest.json`.

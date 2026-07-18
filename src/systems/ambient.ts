@@ -85,7 +85,8 @@ function addDust(scene: Phaser.Scene, widthPx: number, heightPx: number): void {
     }
 }
 
-/** Room2 forest: fireflies — warm blink + gentle wander. */
+/** Room2 forest: fireflies — warm blink + gentle wander. M11: the first six
+ *  get a soft emissive glow (shared texture, capped FX object count). */
 function addFireflies(scene: Phaser.Scene, widthPx: number, heightPx: number): void {
     for (let i = 0; i < 14; i++) {
         const { x, y } = spot(widthPx, heightPx);
@@ -183,5 +184,132 @@ export function addAmbient(
         addFog(scene, widthPx, heightPx);
     } else if (room === 'room4-ruin') {
         addEmbers(scene, widthPx, heightPx);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// M11 room atmosphere overlays (screen-space, depth 25: above overhead layer
+// 20, below menu chrome 50 and the pause scrim 300). Scene-hosted tweens →
+// pause-frozen; turbo → static placement; missing textures → skip. The
+// forest/marsh sheets ('fx.shafts'/'fx.fog') arrive from the Assets lane —
+// the Overworld queues them and calls addRoomOverlays after its loader runs.
+// ---------------------------------------------------------------------------
+
+const OVERLAY_DEPTH = 25;
+const WARM_GRAD_KEY = 'ambient.warmgrad';
+
+/** Soft top-down warm gradient texture (CanvasTexture: renderer-agnostic). */
+function ensureWarmGradient(scene: Phaser.Scene): boolean {
+    if (scene.textures.exists(WARM_GRAD_KEY)) {
+        return true;
+    }
+    const tex = scene.textures.createCanvas(WARM_GRAD_KEY, 8, 112);
+    if (!tex) {
+        return false;
+    }
+    const ctx = tex.getContext();
+    const grad = ctx.createLinearGradient(0, 0, 0, 112);
+    grad.addColorStop(0, 'rgba(255, 186, 100, 0.55)');
+    grad.addColorStop(1, 'rgba(255, 186, 100, 0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 8, 112);
+    tex.refresh();
+    return true;
+}
+
+/** Room1 gate: golden-hour warm gradient washing down from the sky. */
+function addGateGradient(scene: Phaser.Scene): void {
+    if (!ensureWarmGradient(scene)) {
+        return;
+    }
+    scene.add
+        .image(0, 0, WARM_GRAD_KEY)
+        .setOrigin(0, 0)
+        .setDisplaySize(256, 112)
+        .setScrollFactor(0)
+        .setDepth(OVERLAY_DEPTH)
+        .setAlpha(0.5)
+        .setBlendMode(Phaser.BlendModes.SCREEN);
+}
+
+/** Room2 forest: god-ray sheet at screen blend with a slow 6s shimmer. */
+function addForestShafts(scene: Phaser.Scene): void {
+    if (!scene.textures.exists('fx.shafts')) {
+        return;
+    }
+    const shafts = scene.add
+        .image(128, 72, 'fx.shafts')
+        .setScrollFactor(0)
+        .setDepth(OVERLAY_DEPTH)
+        .setAlpha(0.18)
+        .setBlendMode(Phaser.BlendModes.SCREEN);
+    if (isTurbo()) {
+        return;
+    }
+    scene.tweens.add({
+        targets: shafts,
+        alpha: 0.1,
+        duration: Math.max(1, dur(3000)), // half-cycle; yoyo → 6s shimmer
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut'
+    });
+}
+
+/** Room3 marsh: ground-fog band hugging the bottom edge, drifting laterally. */
+function addMarshFogBand(scene: Phaser.Scene): void {
+    if (!scene.textures.exists('fx.fog')) {
+        return;
+    }
+    const fog = scene.add
+        .image(128, 192, 'fx.fog')
+        .setScrollFactor(0)
+        .setDepth(OVERLAY_DEPTH)
+        .setAlpha(0.35)
+        .setScale(1.1, 1); // overscan so the drift never exposes a seam
+    if (isTurbo()) {
+        return;
+    }
+    scene.tweens.add({
+        targets: fog,
+        x: { from: 120, to: 136 },
+        duration: Math.max(1, dur(4000)),
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut'
+    });
+}
+
+/** Room4 ruin: warm ember light pulsing over the whole frame (4s cycle). */
+function addRuinPulse(scene: Phaser.Scene): void {
+    const pulse = scene.add
+        .rectangle(128, 112, 256, 224, 0xff5a20, 1)
+        .setScrollFactor(0)
+        .setDepth(OVERLAY_DEPTH)
+        .setAlpha(isTurbo() ? 0.08 : 0.05)
+        .setBlendMode(Phaser.BlendModes.SCREEN);
+    if (isTurbo()) {
+        return;
+    }
+    scene.tweens.add({
+        targets: pulse,
+        alpha: 0.12,
+        duration: Math.max(1, dur(2000)), // half-cycle; yoyo → 4s pulse
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut'
+    });
+}
+
+/** Attach the room's screen-space atmosphere overlay (M11). */
+export function addRoomOverlays(scene: Phaser.Scene, room: string): void {
+    if (room === 'room1-gate') {
+        addGateGradient(scene);
+    } else if (room === 'room2-forest') {
+        addForestShafts(scene);
+    } else if (room === 'room3-marsh') {
+        addMarshFogBand(scene);
+    } else if (room === 'room4-ruin') {
+        addRuinPulse(scene);
     }
 }
