@@ -203,7 +203,11 @@ export class Overworld extends Phaser.Scene {
         if (!hintFlags['hint.move']) {
             this.reg.set('flags', { ...hintFlags, 'hint.move': true });
             // Next tick: the parallel UIOverlay may not have created yet.
-            this.time.delayedCall(0, () => this.ui()?.toast('ARROWS TO MOVE\nENTER TO READ SIGNS'));
+            // Device-aware hint: the menu key differs on touch (B) vs keys (X).
+            const menuHint = this.sys.game.device.input.touch ? 'B OPENS MENU' : 'X OPENS MENU';
+            this.time.delayedCall(0, () =>
+                this.ui()?.toast(`ARROWS TO MOVE\nENTER READS - ${menuHint}`)
+            );
         }
 
         // Autosave on Overworld enter (§4/§8) — persists the current room id.

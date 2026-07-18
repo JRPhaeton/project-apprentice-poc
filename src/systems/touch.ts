@@ -318,6 +318,21 @@ export function createTouchControls(scene: Phaser.Scene): void {
         button(BTN_B.x, BTN_B.y, 3, 'ui.touch.gen.b', genRoundButton, 'B'),
         () => bus.press('cancel')
     );
+    // M9 clarity: contextual caption under B — it OPENS the field menu in the
+    // overworld and backs out everywhere else. Reads the pocScene hook so it
+    // tracks scene switches without coupling to scene internals.
+    const bCaption = addUiText(scene, BTN_B.x, BTN_B.y + 21, 'BACK', { color: 0xc0c0d0 })
+        .setOrigin(0.5)
+        .setDepth(DEPTH + 1)
+        .setAlpha(0.8);
+    let bCaptionText = 'BACK';
+    scene.events.on(Phaser.Scenes.Events.UPDATE, () => {
+        const wanted = document.body.dataset.pocScene === 'Overworld' ? 'MENU' : 'BACK';
+        if (wanted !== bCaptionText) {
+            bCaptionText = wanted;
+            bCaption.setText(wanted);
+        }
+    });
     wireButton(
         PAUSE.x,
         PAUSE.y,
