@@ -8,6 +8,8 @@ import { markHp, markRoom, markScene } from '../systems/hooks';
 import { getInputBus, type InputBus } from '../systems/input-bus';
 import {
     buildOverworldMap,
+    OVERHEAD_LAYER,
+    shimmerAnimFor,
     TILE_SIZE,
     type BossDoorZone,
     type EncounterZone,
@@ -26,10 +28,25 @@ const HERO_KEY = 'hero.overworld';
 const DIR_FRAME = { down: 0, up: 1, left: 2, right: 3 } as const;
 type Facing = keyof typeof DIR_FRAME;
 
-// M6 tile shimmer: ground-layer tile indices that get an animated overlay.
-const SHIMMER_ANIM: Record<number, string> = { 3: 'water', 9: 'marshwater', 15: 'ember' };
+// M6/M8 tile shimmer: cells resolve via shimmerAnimFor (tile `anim`
+// property in tileset v2, legacy index fallback for v1 maps).
 const SHIMMER_KEY = 'tile.anim';
 const SHIMMER_CAP = 150; // overlays per room
+
+// M8: overworld patrol minis + blob shadow (frame 6 of this sheet).
+const MINIS_KEY = 'enemy.minis';
+const MINI_BY_ENEMY: Record<string, string> = {
+    spider: 'spider',
+    wisp: 'wisp',
+    revenant: 'revenant'
+};
+
+// M8 room mood tints (vale-growing-cold canon) — tile layers + shimmer only.
+const ROOM_TINT: Record<string, number> = {
+    'room1-gate': 0xfff0e0,
+    'room3-marsh': 0xd8e8f0,
+    'room4-ruin': 0xc8d0e8
+};
 
 export class Overworld extends Phaser.Scene {
     /** Zone key of the encounter we left for Battle (victory → cleared flag). */
@@ -69,6 +86,13 @@ export class Overworld extends Phaser.Scene {
 
         this.mapData = buildOverworldMap(this, this.room);
         const { widthPx, heightPx, spawn } = this.mapData;
+        // M8 room mood tint — tile layers only; hero/minis/UI stay untinted.
+        const tint = ROOM_TINT[this.room];
+        if (tint !== undefined) {
+            for (const layer of this.mapData.tileLayers) {
+                layer.setTint(tint);
+            }
+        }
         this.addTileShimmer(); // M6: animated water/marsh/ember overlays
 
         ensureTexture(this, HERO_KEY, 16, 16, 0x4060c0);
@@ -81,6 +105,24 @@ export class Overworld extends Phaser.Scene {
 
         this.hero = this.physics.add.sprite(pos.x, pos.y, HERO_KEY, 0);
         this.hero.setDepth(10);
+        // M8 tall hero (16×24): keep hero.x/y — and therefore every zone,
+        // exit and door check — at the SAME world position as the legacy
+        // 16×16 sprite by pinning a 16×14 FEET box. Body edges: left/right/
+        // bottom identical to v1; only the box top drops 2px (head-room
+        // under overhangs). Legacy sheets keep the full-frame default body.
+        const frameH = this.hero.frame.height;
+        if (frameH > 16) {
+            this.hero.setOrigin(0.5, (frameH - 8) / frameH);
+            this.hero.body!.setSize(16, 14, false);
+            this.hero.body!.setOffset(0, frameH - 14);
+        }
+        // Blob shadow under the hero's feet (enemy.minis frame 6).
+        if (this.textures.exists(MINIS_KEY)) {
+            const shadow = this.add.image(pos.x, pos.y + 6, MINIS_KEY, 6).setAlpha(0.4).setDepth(9);
+            this.events.on(Phaser.Scenes.Events.UPDATE, () => {
+                shadow.setPosition(this.hero.x, this.hero.y + 6);
+            });
+        }
         this.physics.world.setBounds(0, 0, widthPx, heightPx);
         this.hero.setCollideWorldBounds(true);
         for (const layer of this.mapData.collisionLayers) {
@@ -96,10 +138,7 @@ export class Overworld extends Phaser.Scene {
             .map((z, i) => ({ ...z, key: `cleared.${this.room}.${z.encounterId}#${i}` }))
             .filter((z) => !flags[z.key]);
         for (const zone of this.zones) {
-            this.add
-                .rectangle(zone.rect.centerX, zone.rect.centerY, 12, 12, 0xc03030, 0.9)
-                .setStrokeStyle(1, 0xff8080)
-                .setDepth(5);
+            this.addPatrolMarker(zone.rect.centerX, zone.rect.centerY, zone.encounterId);
         }
 
         // Boss door marker (inert once the boss falls — flag 'boss.defeated').
@@ -168,15 +207,39 @@ export class Overworld extends Phaser.Scene {
      * marsh-water / ember tile (indices 3/9/15), capped per room. Pure
      * presentation — NO map data or collision changes; missing sheet → no-op.
      */
+    /**
+     * M8: telegraphed patrols render as mini creature sprites (+ shadow)
+     * from enemy.minis, picked by the encounter's first enemy. Falls back to
+     * the pre-M8 red rect when the sheet is missing (placeholder-first).
+     */
+    private addPatrolMarker(x: number, y: number, encounterId: string): void {
+        const encounters = this.reg.get('defs').encounters;
+        const firstEnemy = encounters[encounterId]?.enemies[0] ?? '';
+        const animName = MINI_BY_ENEMY[firstEnemy];
+        const animKey = `${MINIS_KEY}.${animName}`;
+        if (animName && this.textures.exists(MINIS_KEY) && this.anims.exists(animKey)) {
+            this.add.image(x, y + 5, MINIS_KEY, 6).setAlpha(0.35).setDepth(8);
+            this.add.sprite(x, y, MINIS_KEY).setDepth(9).play(animKey);
+            return;
+        }
+        this.add
+            .rectangle(x, y, 12, 12, 0xc03030, 0.9)
+            .setStrokeStyle(1, 0xff8080)
+            .setDepth(5);
+    }
+
     private addTileShimmer(): void {
         if (!this.textures.exists(SHIMMER_KEY)) {
             return;
         }
         let count = 0;
         for (const layer of this.mapData.tileLayers) {
+            if (layer.layer.name === OVERHEAD_LAYER) {
+                continue; // canopies/caps never shimmer
+            }
             for (const row of layer.layer.data) {
                 for (const tile of row) {
-                    const animName = SHIMMER_ANIM[tile.index];
+                    const animName = shimmerAnimFor(tile);
                     if (!animName) {
                         continue;
                     }
@@ -184,10 +247,14 @@ export class Overworld extends Phaser.Scene {
                     if (!this.anims.exists(animKey)) {
                         continue;
                     }
-                    this.add
+                    const overlay = this.add
                         .sprite(tile.pixelX + TILE_SIZE / 2, tile.pixelY + TILE_SIZE / 2, SHIMMER_KEY)
-                        .setDepth(1)
-                        .play(animKey);
+                        .setDepth(1);
+                    const roomTint = ROOM_TINT[this.room];
+                    if (roomTint !== undefined) {
+                        overlay.setTint(roomTint);
+                    }
+                    overlay.play(animKey);
                     count += 1;
                     if (count >= SHIMMER_CAP) {
                         return;

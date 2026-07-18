@@ -45,12 +45,22 @@
     "hero.overworld": {
         "file": "assets/sprites/hero-overworld.png",
         "frameWidth": 16,
-        "frameHeight": 16,
+        "frameHeight": 24,
         "anims": {
             "down": { "frames": [0, 1], "frameRate": 6, "repeat": -1 },
             "up": { "frames": [2, 3], "frameRate": 6, "repeat": -1 },
             "left": { "frames": [4, 5], "frameRate": 6, "repeat": -1 },
             "right": { "frames": [6, 7], "frameRate": 6, "repeat": -1 }
+        }
+    },
+    "enemy.minis": {
+        "file": "assets/sprites/overworld-minis.png",
+        "frameWidth": 16,
+        "frameHeight": 16,
+        "anims": {
+            "spider": { "frames": [0, 1], "frameRate": 2, "repeat": -1 },
+            "wisp": { "frames": [2, 3], "frameRate": 2, "repeat": -1 },
+            "revenant": { "frames": [4, 5], "frameRate": 2, "repeat": -1 }
         }
     },
     "backdrop.forest": {

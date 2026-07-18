@@ -33,12 +33,14 @@ export class Preload extends Phaser.Scene {
         // M6 tile shimmer overlays (water/marsh-water/ember). Manifest entry
         // lands from the Art lane; until then this is a silent no-op.
         queueSheet(this.load, art, 'tile.anim');
+        queueSheet(this.load, art, 'enemy.minis'); // M8 patrol minis + shadow
     }
 
     create(): void {
         const art = getRegistry(this).get('defs').art;
         registerAnims(this, art, 'hero.overworld');
         registerAnims(this, art, 'tile.anim');
+        registerAnims(this, art, 'enemy.minis');
         // Debug ?scene=overworld&room=<id> (VITE_ENABLE_DEBUG only): the room
         // was seeded into the registry by bootstrap; skip Title and go there.
         if (readDebugOptions().jumpRoomId) {

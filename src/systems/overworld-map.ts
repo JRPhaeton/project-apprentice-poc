@@ -22,6 +22,45 @@ export const START_ROOM = 'room1-gate';
 
 export const TILE_SIZE = 16;
 
+/** M8: name + depth of the walk-under layer (hero renders at depth 10). */
+export const OVERHEAD_LAYER = 'overhead';
+export const OVERHEAD_DEPTH = 20;
+
+// Legacy shimmer indices from tileset v1 (water/marsh-water/ember). Only
+// consulted when a map's tileset declares no `anim` property at all —
+// tileset-v2 maps are purely property-driven. TODO(M8 cleanup): drop once
+// no v1 maps remain.
+const LEGACY_SHIMMER: Record<number, string> = { 3: 'water', 9: 'marshwater', 15: 'ember' };
+
+const tilesetHasAnimProp = new WeakMap<Phaser.Tilemaps.Tileset, boolean>();
+
+/**
+ * M8 shimmer contract: animated cells are tagged with a string tile property
+ * `anim` ('water' | 'marshwater' | 'ember') in the embedded tileset, so the
+ * Assets lane's tile layout stays free. Falls back to the v1 fixed indices
+ * only for tilesets that declare no anim property anywhere.
+ */
+export function shimmerAnimFor(tile: Phaser.Tilemaps.Tile): string | null {
+    const props = tile.properties as Record<string, unknown> | undefined;
+    const anim = props?.anim;
+    if (typeof anim === 'string') {
+        return anim;
+    }
+    const tileset = tile.tileset;
+    if (tileset) {
+        let declared = tilesetHasAnimProp.get(tileset);
+        if (declared === undefined) {
+            const data = tileset.tileProperties as Record<string, { anim?: unknown }> | undefined;
+            declared = !!data && Object.values(data).some((p) => typeof p?.anim === 'string');
+            tilesetHasAnimProp.set(tileset, declared);
+        }
+        if (declared) {
+            return null; // v2 tileset: property-driven only, no index fallback
+        }
+    }
+    return LEGACY_SHIMMER[tile.index] ?? null;
+}
+
 export interface EncounterZone {
     encounterId: string;
     rect: Phaser.Geom.Rectangle;
@@ -108,9 +147,16 @@ function buildFromTilemap(scene: Phaser.Scene, key: string): OverworldMapData {
             if (!layer) {
                 continue;
             }
+            tileLayers.push(layer);
+            // M8: the 'overhead' layer (canopies, wall caps) renders ABOVE the
+            // hero (depth 10) and never collides — walking under foliage is
+            // the FF6 depth cue. Ground keeps property-driven collision.
+            if (layerData.name === OVERHEAD_LAYER) {
+                layer.setDepth(OVERHEAD_DEPTH);
+                continue;
+            }
             layer.setCollisionByProperty({ collide: true });
             collisionLayers.push(layer);
-            tileLayers.push(layer);
         }
     }
 

@@ -4,7 +4,13 @@
 ## 1. Grid & Dimensions (from PLAN §2, canonical)
 
 - All art on a **16×16 grid**; every frame size a multiple of 16. Hardware truth: 8×8 SNES tiles, 4bpp.
-- **Overworld tiles: 16×16.** Overworld hero/NPC/patrol sprites: 16×16.
+- **Overworld tiles: 16×16.** Patrol minis 16×16. **Overworld hero: 16×24** (M8 amendment, below).
+- **M8 amendment (overworld depth pass, per the approved M8 plan):**
+  - **Hero overworld sprite is 16×24** (FF6 tall proportion: head ~10 of 24 px, ¾ stance, 5-ramp cloak + shared outline + rim light), 2-frame walk per facing, unchanged anim names/pairs. Sheet is **128×48** — 8 frames on the top row, bottom frame row transparent padding so the PNG stays on CI's 16px grid. Physics keeps the 16×14 feet box, so walk feel and E2E routes are untouched.
+  - **Patrol markers are creature minis**: `overworld-minis.png` 128×16 — spider/wisp/revenant 2-frame idle bobs (manifest `enemy.minis`, frameRate 2) + frame 6 blob shadow (palette-alpha, drawn under hero and patrols).
+  - **Tileset v2 is 256×128** (16×8 grid, 123 of 128 slots used; layout + `collide`/`anim` tile-property tables live in `tools/tileset_v2.py`): base terrains (grass ×3 variants incl. a feathered dark patch, dark-grass, mud, ruin-floor), five marching-squares transition sets (path↔grass, water↔grass, mud↔dark-grass full 16-mask; marsh-water↔mud, ruin-floor↔dark-grass minimal 12-mask), tree family (collide trunks on grass/dark bases, 16-mask scallop-cut canopy set + 3 one-tile hang fringes — both on the `overhead` layer rendered above the hero), wall/gate/ruin-wall/cliff top+face pairs (faces collide on the ground layer; prop-free tops are the overhead caps, plus cap-lip strips), sign ×3 bases, door, decor (rock, stump, bones, reeds, flowers, rubble, pebbles, ember-glow), and shadow-edge variants of every walkable base for cells south of walls/trees.
+  - **Engine contract is property-driven**: `collide: true` on solids, `anim: 'water' | 'marshwater' | 'ember'` on shimmer cells — the engine never reads tile indices. `tile-anim.png` frame 0 of each pair is pixel-identical to the anim-tagged tileset tile.
+  - Maps are regenerated ONLY via `tools/gen_maps.py` (topology-preserving compositor: collide grid + objects layer asserted equal to v1).
 - **Battle mobs: 64×64** (4×4 tiles) — Vale Spider, Marsh Wisp, Revenant.
 - **Boss: 96×96** (6×6 tiles) — Cloaked Chimera. No sprite/tileset frame may exceed 96×96 (asset-lint).
 - Internal resolution 256×224, camera shows 16×14 tiles. Compose battle layouts against that frame.
@@ -37,7 +43,7 @@ Per unit (battle sprites):
   - `uncloaked.idle` 2, `uncloaked.tell` 2 (Flame Breath is always telegraphed one full turn ahead), `uncloaked.attack` 3, `uncloaked.breath` 3
   - Cloak-off transition: v0 = group switch + screen flash; optional 2-frame `transition` group is an M3 decision. **Storyboard the cloak-off moment before art generation** (PLAN §5.3).
 - **Hero battle sprite (64×64):** `idle` 2, `defend` 2 (readable guard pose — Defend is the core verb, make it unmistakable), `attack` 3.
-- Overworld (16×16): hero 2-frame walk per facing; NPC/patrol 2-frame idle.
+- Overworld: hero (16×24, M8) 2-frame walk per facing; patrol minis (16×16) 2-frame idle bob.
 
 ## 4. UI Chrome (draft)
 
