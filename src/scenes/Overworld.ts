@@ -4,6 +4,7 @@ import { ensureTexture } from '../systems/anims';
 import { playMusic } from '../systems/audio';
 import { autosave } from '../systems/autosave';
 import { makeBattleRequest } from '../systems/battle-request';
+import { FieldMenu } from '../systems/field-menu';
 import { markHp, markRoom, markScene } from '../systems/hooks';
 import { getInputBus, type InputBus } from '../systems/input-bus';
 import {
@@ -62,6 +63,7 @@ export class Overworld extends Phaser.Scene {
     private leaving = false;
     private bus!: InputBus;
     private busInteract = false;
+    private fieldMenu!: FieldMenu;
     private keys!: {
         cursors: Phaser.Types.Input.Keyboard.CursorKeys;
         w: Phaser.Input.Keyboard.Key;
@@ -179,6 +181,12 @@ export class Overworld extends Phaser.Scene {
             this.bus.off('confirm', onBusConfirm);
         });
         new PauseController(this); // §8: P freezes tweens/timers/physics
+        // M9 field menu: X/Esc/B opens it while nothing else is modal. Its
+        // key/bus handlers self-unbind on SHUTDOWN (PauseController-style).
+        this.fieldMenu = new FieldMenu(this, {
+            canOpen: () => !this.leaving && !this.ui()?.dialogueOpen,
+            ui: () => this.ui()
+        });
 
         const hero = this.reg.get('hero');
         markHp(hero.stats.hp); // pocHp hook, even if the HUD isn't up yet
@@ -273,6 +281,14 @@ export class Overworld extends Phaser.Scene {
         const ui = this.ui();
         if (ui?.dialogueOpen) {
             // Drain interact presses so closing a dialogue can't re-open it.
+            Phaser.Input.Keyboard.JustDown(this.keys.enter);
+            Phaser.Input.Keyboard.JustDown(this.keys.z);
+            this.hero.setVelocity(0, 0);
+            return;
+        }
+        if (this.fieldMenu.isOpen()) {
+            // M9 field menu modal: hero frozen; drain interact presses so
+            // menu confirms can't fire a sign/door read on the same key.
             Phaser.Input.Keyboard.JustDown(this.keys.enter);
             Phaser.Input.Keyboard.JustDown(this.keys.z);
             this.hero.setVelocity(0, 0);

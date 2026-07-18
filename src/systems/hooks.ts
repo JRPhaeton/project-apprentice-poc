@@ -9,6 +9,8 @@
  *   - body[data-poc-music]        music key ONLY while actually audibly playing;
  *                                 absent when stopped, locked, or files missing
  *   - body[data-poc-touch]        "1" while the touch UI is active (M7)
+ *   - body[data-poc-menu]         "field" while the Overworld field menu is
+ *                                 open (M9); absent when closed
  */
 
 export type SceneHookKey = 'Title' | 'Intro' | 'Overworld' | 'Battle' | 'GameOver' | 'Victory';
@@ -39,6 +41,15 @@ export function markTouch(active: boolean): void {
         document.body.dataset.pocTouch = '1';
     } else {
         delete document.body.dataset.pocTouch;
+    }
+}
+
+/** Set while the Overworld field menu is open (M9). */
+export function markFieldMenu(open: boolean): void {
+    if (open) {
+        document.body.dataset.pocMenu = 'field';
+    } else {
+        delete document.body.dataset.pocMenu;
     }
 }
 
