@@ -2,6 +2,8 @@
 
 A browser-native, SNES-style turn-based RPG proof of concept — one hero, three mobs, one boss, four rooms, built to nail the feel of a single high-stakes combat/exploration loop.
 
+**The Stolen Emberheart.** The Cloaked Chimera slew Master Corvan and swallowed the Emberheart — the vale's last warm light. The nights are its now; the wisps sing for it. You are Aden, the last apprentice. Take the fire back.
+
 **▶ Play:** https://jrphaeton.github.io/project-apprentice-poc/
 
 ![Demo](docs/demo.gif)

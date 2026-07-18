@@ -22,6 +22,14 @@ Single-stage browser JRPG POC. One hero, three mob types, one boss, four connect
 | Combat numbers | PLAN §5.2/§5.3 copied verbatim in §5 below as **locked v0** | Reachability-tuned seed; lethality tuning is an explicit M1→M3 task; §10 sim expected red until it lands. |
 | QoL | PLAN §8 verbatim, in §6 below | Denylist enforced in review. |
 
+## 2b. Story Canon — "The Stolen Emberheart" (locked M6)
+
+Master Corvan kept the **Emberheart**, the vale's last warm light. At dusk the Cloaked Chimera slew him, **swallowed the Emberheart**, and nested in the ruin. The vale grows cold and dark; wisps breed in the gloom. Aden, the last apprentice, goes to take it back before the master's soul gutters out.
+
+- **Intro:** taunt cinematic after NEW GAME (Chimera addresses the player directly; Enter advances, X skips; CONTINUE bypasses). Plays `music.sting`.
+- **Escalation:** claw-scratched Chimera taunts on the forest and marsh signs; the boss door is its final goad; GameOver carries a taunt; Victory is the epilogue — Aden relights the Emberheart.
+- Tone: dark, hopeful-yet-sad, 90s JRPG. All dialogue lives in `src/data/dialogue.json` under unified `dlg-*` IDs.
+
 ## 3. World & Rooms
 
 Room graph (linear with gated door; Tiled maps, World lane):
@@ -108,3 +116,5 @@ Tone: hopeful yet sad. Short — every line fits one 256px-wide dialogue box pag
 | 2 | 2026-07-17 | §7 | Dialogue ID convention split (M2, World lane): engine-referenced Room2 IDs stay `sign-gate`/`npc-gatekeeper`; the four new entries use GDD `dlg-*` IDs. Unify at M4 room split. | Orchestrator |
 | 3 | 2026-07-17 | §5 | M3 lethality tuning (sanctioned M1→M3 task, PLAN §5.2): hero HP 40→42, Heal 15→18, wisp ATK 5→6, revenant ATK 6→5. All four §10 sim gates pass on seeds 1..1000; 2-mob careless winRate 0.54→0.31; leveling gauntlet survival 1.000. | Orchestrator |
 | 4 | 2026-07-17 | §5 | Revenant-cost prose corrected: tuned reality is ~25–30% HP typical, ~50–55% when the revive triggers (the old ~45%/~90% claim conflicted with the median ≥ 20 sim gate at 50% revive). | Orchestrator |
+| 5 | 2026-07-17 | §2b/§7 | M6 story lock: "The Stolen Emberheart" canon, intro taunt cinematic, full dialogue rewrite, dialogue IDs unified to `dlg-*` (clears amendment 2's debt; map sign props updated). | Orchestrator |
+| 6 | 2026-07-17 | Art/Audio bibles | M6 presentation upgrade within locked dims: hero overworld sheet 4→8 frames (2-frame walk per direction; frame SIZE unchanged), sprite palettes to full 16-color budget, new non-sprite assets (bitmap font, 256×144 backdrops, ui-panel, tile-anim overlays), audio remastered to SPC700-style synthesis + `music.sting`. | Orchestrator |

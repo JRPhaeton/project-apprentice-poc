@@ -1,44 +1,44 @@
 {
-    "sign-gate": {
-        "id": "sign-gate",
+    "dlg-sign-gate": {
+        "id": "dlg-sign-gate",
         "lines": [
-            "The road to the ruin is closed. It has been closed a long time.",
-            "Someone should have taken this sign down by now."
+            "ROAD CLOSED. The ruin keeps its own dead now.",
+            "Closed since the night the master's fire went out."
         ]
     },
-    "npc-gatekeeper": {
-        "id": "npc-gatekeeper",
+    "dlg-npc-keeper-1": {
+        "id": "dlg-npc-keeper-1",
         "lines": [
-            "Another apprentice? The others went up that road too, once.",
-            "Go on, then — one of you has to be the one who comes back."
+            "Master Corvan is gone. The beast took the Emberheart.",
+            "The nights grow colder. Bring back the fire, Aden."
         ]
     },
     "dlg-npc-keeper-2": {
         "id": "dlg-npc-keeper-2",
         "lines": [
-            "I keep the gate oiled. Silly, I suppose.",
-            "But a gate should open easily for good news."
+            "I still trim the lamps at dusk. Habit, I suppose.",
+            "When the Emberheart burns again, we won't need them."
         ]
     },
     "dlg-sign-path": {
         "id": "dlg-sign-path",
         "lines": [
-            "Mind the webs. The forest keeps what it catches —",
-            "travel light, and be worth less to it."
+            "Something has clawed over the words:",
+            "YOUR MASTER TASTED OF ASH. COME AND BURN LONGER. - C"
         ]
     },
     "dlg-sign-marsh": {
         "id": "dlg-sign-marsh",
         "lines": [
-            "The marsh lights are not stars. Follow them anyway.",
-            "They end where the road ends."
+            "Claw-marks score the marsh sign:",
+            "THE WISPS SING FOR ME, SPARK. THEIR LIGHT IS MINE TOO. - C"
         ]
     },
     "dlg-sign-door": {
         "id": "dlg-sign-door",
         "lines": [
-            "Here waits the last trial.",
-            "Whoever you were before this door, leave it — you will not need it after."
+            "The door is scored with deep claw-marks:",
+            "BRING ME YOUR LIGHT, SPARK. I AM STILL HUNGRY. - C"
         ]
     }
 }

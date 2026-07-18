@@ -8,10 +8,13 @@ import { markReady, markScene } from '../systems/hooks';
 import { START_ROOM } from '../systems/overworld-map';
 import { getRegistry, type GameRegistry } from '../systems/registry';
 import { loadSave } from '../systems/storage';
+import { addPanel, addUiText } from '../systems/ui';
 
 /**
  * Title screen: final title + PRESS ENTER; minimal CONTINUE / NEW GAME menu
  * when a valid save exists (parse never throws — discard-on-mismatch, §4).
+ * M6: NEW GAME routes through the Intro taunt scene before room1-gate;
+ * CONTINUE (and debug jumps, which never reach Title) bypass it entirely.
  * Music routing choice (§6): the Title is SILENT — the overworld theme
  * lazy-loads at first Overworld enter, which also guarantees playback starts
  * after a user input (the Enter press here), sidestepping autoplay locks.
@@ -33,28 +36,25 @@ export class Title extends Phaser.Scene {
         this.scene.stop('UIOverlay'); // returning from GameOver/Victory
         stopMusic(this); // Title is silent (routing choice, see class doc)
 
-        this.add
-            .text(128, 78, 'TRIAL OF THE APPRENTICE', {
-                fontFamily: 'monospace',
-                fontSize: '12px',
-                color: '#e0e0e0'
-            })
-            .setOrigin(0.5);
-        this.add
-            .text(128, 96, 'a saga-inspired trial', { fontFamily: 'monospace', fontSize: '8px', color: '#606080' })
-            .setOrigin(0.5);
-        const prompt = this.add
-            .text(128, 150, 'PRESS ENTER', { fontFamily: 'monospace', fontSize: '8px', color: '#ffff80' })
-            .setOrigin(0.5);
+        addUiText(this, 128, 60, 'TRIAL OF THE\nAPPRENTICE', {
+            size: 16,
+            color: 0xe0e0e0,
+            align: 'center',
+            lineSpacing: 2
+        }).setOrigin(0.5);
+        addUiText(this, 128, 92, 'the stolen emberheart', { color: 0x606080 }).setOrigin(0.5);
+        const prompt = addUiText(this, 128, 112, 'PRESS ENTER', { color: 0xffff80 }).setOrigin(0.5);
         this.tweens.add({ targets: prompt, alpha: 0.25, yoyo: true, repeat: -1, duration: 600 });
-        // §8 QoL hints, unobtrusive footer: pause + battle speed toggle.
-        this.add
-            .text(128, 214, 'P PAUSE   T BATTLE SPEED', {
-                fontFamily: 'monospace',
-                fontSize: '8px',
-                color: '#484860'
-            })
-            .setOrigin(0.5);
+
+        // §8 QoL / M6 controls clarity: full control set in a chrome panel.
+        addPanel(this, 4, 166, 248, 52);
+        addUiText(
+            this,
+            128,
+            192,
+            'ARROWS/WASD MOVE\nENTER/Z CONFIRM  X/ESC CANCEL\nP PAUSE  T SPEED',
+            { color: 0xb0b0c8, align: 'center', lineSpacing: 4 }
+        ).setOrigin(0.5);
 
         this.save = loadSave(); // never throws (parseSaveBlob)
 
@@ -83,7 +83,7 @@ export class Title extends Phaser.Scene {
     }
 
     private openMenu(): void {
-        this.menu ??= new MenuList(this, 92, 160, 72);
+        this.menu ??= new MenuList(this, 92, 124, 72);
         this.menu.open({
             items: [
                 { label: 'CONTINUE', value: 'continue', enabled: true },
@@ -93,7 +93,11 @@ export class Title extends Phaser.Scene {
         });
     }
 
-    /** Reset the run state (fresh or from save), then enter the Overworld. */
+    /**
+     * Reset the run state (fresh or from save), then enter the world. NEW
+     * GAME plays the Intro taunt first (Intro launches the UIOverlay when it
+     * hands off to the Overworld); CONTINUE goes straight to the saved room.
+     */
     private startGame(save: SaveBlob | null): void {
         if (this.started) {
             return;
@@ -109,7 +113,11 @@ export class Title extends Phaser.Scene {
         this.reg.set('lastBattleResult', null);
         this.reg.set('overworldReturn', null);
         this.reg.set('stats', { battlesWon: 0, xpEarned: 0 });
-        this.scene.launch('UIOverlay');
-        this.scene.start('Overworld');
+        if (save) {
+            this.scene.launch('UIOverlay');
+            this.scene.start('Overworld');
+        } else {
+            this.scene.start('Intro');
+        }
     }
 }

@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 
 import { bootGame } from '../systems/bootstrap';
+import { queueUiAssets } from '../systems/ui';
 
 export class Boot extends Phaser.Scene {
     constructor() {
@@ -13,6 +14,10 @@ export class Boot extends Phaser.Scene {
         // loader to BASE_URL makes leading-slash-free keys resolve on both
         // localhost and the GitHub Pages subpath.
         this.load.setBaseURL(import.meta.env.BASE_URL);
+        // M6: bitmap font + window chrome load HERE (tiny) so both the normal
+        // flow and ?scene=battle debug jumps render with them; missing files
+        // degrade to the previous monospace/rect path inside the UI kit.
+        queueUiAssets(this.load);
     }
 
     create(): void {

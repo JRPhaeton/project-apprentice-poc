@@ -20,8 +20,15 @@ import type { UIOverlay } from './UIOverlay';
 
 const SPEED = 80; // px/s (§ integration contract)
 const HERO_KEY = 'hero.overworld';
-// Manifest hero sheet frame order: 0=down, 1=up, 2=left, 3=right.
+// Legacy 4-frame hero sheet order: 0=down, 1=up, 2=left, 3=right. The M6
+// 8-frame walk sheet's facing frames come from the manifest anims instead.
 const DIR_FRAME = { down: 0, up: 1, left: 2, right: 3 } as const;
+type Facing = keyof typeof DIR_FRAME;
+
+// M6 tile shimmer: ground-layer tile indices that get an animated overlay.
+const SHIMMER_ANIM: Record<number, string> = { 3: 'water', 9: 'marshwater', 15: 'ember' };
+const SHIMMER_KEY = 'tile.anim';
+const SHIMMER_CAP = 150; // overlays per room
 
 export class Overworld extends Phaser.Scene {
     /** Zone key of the encounter we left for Battle (victory → cleared flag). */
@@ -33,6 +40,7 @@ export class Overworld extends Phaser.Scene {
     private mapData!: OverworldMapData;
     private zones: (EncounterZone & { key: string })[] = [];
     private heroHasFrames = false;
+    private facing: Facing = 'down';
     private leaving = false;
     private keys!: {
         cursors: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -58,9 +66,11 @@ export class Overworld extends Phaser.Scene {
 
         this.mapData = buildOverworldMap(this, this.room);
         const { widthPx, heightPx, spawn } = this.mapData;
+        this.addTileShimmer(); // M6: animated water/marsh/ember overlays
 
         ensureTexture(this, HERO_KEY, 16, 16, 0x4060c0);
         this.heroHasFrames = this.textures.get(HERO_KEY).frameTotal > 4;
+        this.facing = 'down';
 
         const returnPos = this.reg.get('overworldReturn');
         const pos = returnPos ?? spawn;
@@ -125,8 +135,51 @@ export class Overworld extends Phaser.Scene {
         // room switches and battle returns).
         playMusic(this, 'music.overworld');
 
+        // M6 first-Overworld move hint, once per save ('hint.move' flag —
+        // persisted by the autosave right below, like 'hint.defend').
+        const hintFlags = this.reg.get('flags');
+        if (!hintFlags['hint.move']) {
+            this.reg.set('flags', { ...hintFlags, 'hint.move': true });
+            // Next tick: the parallel UIOverlay may not have created yet.
+            this.time.delayedCall(0, () => this.ui()?.toast('ARROWS TO MOVE\nENTER TO READ SIGNS'));
+        }
+
         // Autosave on Overworld enter (§4/§8) — persists the current room id.
         autosave(this.reg);
+    }
+
+    /**
+     * M6 tile shimmer: overlay a playing 'tile.anim' sprite on every water /
+     * marsh-water / ember tile (indices 3/9/15), capped per room. Pure
+     * presentation — NO map data or collision changes; missing sheet → no-op.
+     */
+    private addTileShimmer(): void {
+        if (!this.textures.exists(SHIMMER_KEY)) {
+            return;
+        }
+        let count = 0;
+        for (const layer of this.mapData.tileLayers) {
+            for (const row of layer.layer.data) {
+                for (const tile of row) {
+                    const animName = SHIMMER_ANIM[tile.index];
+                    if (!animName) {
+                        continue;
+                    }
+                    const animKey = `${SHIMMER_KEY}.${animName}`;
+                    if (!this.anims.exists(animKey)) {
+                        continue;
+                    }
+                    this.add
+                        .sprite(tile.pixelX + TILE_SIZE / 2, tile.pixelY + TILE_SIZE / 2, SHIMMER_KEY)
+                        .setDepth(1)
+                        .play(animKey);
+                    count += 1;
+                    if (count >= SHIMMER_CAP) {
+                        return;
+                    }
+                }
+            }
+        }
     }
 
     update(): void {
@@ -185,7 +238,7 @@ export class Overworld extends Phaser.Scene {
 
         let vx = 0;
         let vy = 0;
-        let dir: keyof typeof DIR_FRAME | null = null;
+        let dir: Facing | null = null;
         if (left !== right) {
             vx = left ? -SPEED : SPEED;
             dir = left ? 'left' : 'right';
@@ -194,9 +247,30 @@ export class Overworld extends Phaser.Scene {
             dir = up ? 'up' : 'down';
         }
         this.hero.setVelocity(vx, vy);
-        if (dir && this.heroHasFrames) {
-            this.hero.setFrame(DIR_FRAME[dir]);
+        if (!this.heroHasFrames) {
+            return; // placeholder texture — nothing to animate
         }
+        // M6 walk cycle: play the manifest anim while moving; when idle, stop
+        // on the FIRST frame of the current facing (manifest-driven — the
+        // 8-frame walk sheet and the legacy 4-frame sheet both work).
+        if (dir) {
+            this.facing = dir;
+            const animKey = `${HERO_KEY}.${dir}`;
+            if (this.anims.exists(animKey)) {
+                this.hero.anims.play(animKey, true);
+            } else {
+                this.hero.setFrame(DIR_FRAME[dir]);
+            }
+        } else if (this.hero.anims.isPlaying) {
+            this.hero.anims.stop();
+            this.hero.setFrame(this.idleFrame());
+        }
+    }
+
+    /** First frame of the facing's manifest anim (legacy fallback: 0..3). */
+    private idleFrame(): number {
+        const anims = this.reg.get('defs').art[HERO_KEY]?.anims;
+        return anims?.[this.facing]?.frames[0] ?? DIR_FRAME[this.facing];
     }
 
     /** Room exits (lane convention): overlap → fade → arrive at target tile. */

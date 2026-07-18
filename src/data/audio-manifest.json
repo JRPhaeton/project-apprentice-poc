@@ -14,6 +14,11 @@
         "m4a": "assets/audio/boss.m4a",
         "volume": 0.8
     },
+    "music.sting": {
+        "ogg": "assets/audio/sting.ogg",
+        "m4a": "assets/audio/sting.m4a",
+        "volume": 0.9
+    },
     "sfx.attack": { "ogg": "assets/audio/sfx-attack.ogg", "m4a": "assets/audio/sfx-attack.m4a", "volume": 1 },
     "sfx.hit": { "ogg": "assets/audio/sfx-hit.ogg", "m4a": "assets/audio/sfx-hit.m4a", "volume": 1 },
     "sfx.magic": { "ogg": "assets/audio/sfx-magic.ogg", "m4a": "assets/audio/sfx-magic.m4a", "volume": 1 },

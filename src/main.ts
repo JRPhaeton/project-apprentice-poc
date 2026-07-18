@@ -3,6 +3,7 @@ import Phaser from 'phaser';
 import { Battle } from './scenes/Battle';
 import { Boot } from './scenes/Boot';
 import { GameOver } from './scenes/GameOver';
+import { Intro } from './scenes/Intro';
 import { Overworld } from './scenes/Overworld';
 import { Preload } from './scenes/Preload';
 import { Title } from './scenes/Title';
@@ -26,7 +27,7 @@ new Phaser.Game({
     physics: {
         default: 'arcade'
     },
-    // Scene graph (§4): Boot → Preload → Title → Overworld ⇄ Battle
-    // (+ UIOverlay parallel), GameOver, Victory.
-    scene: [Boot, Preload, Title, Overworld, Battle, UIOverlay, GameOver, Victory]
+    // Scene graph (§4): Boot → Preload → Title → (Intro on NEW GAME) →
+    // Overworld ⇄ Battle (+ UIOverlay parallel), GameOver, Victory.
+    scene: [Boot, Preload, Title, Intro, Overworld, Battle, UIOverlay, GameOver, Victory]
 });

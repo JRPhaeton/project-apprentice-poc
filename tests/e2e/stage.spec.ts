@@ -112,12 +112,16 @@ test('audio: overworld music after Enter, boss music in the boss battle, zero 40
     const pageErrors = collectPageErrors(page);
     const notFound = collect404s(page);
 
-    // Title → Enter (the real user gesture that unlocks audio) → Overworld
-    // lazy-loads and starts music.overworld (§2 lazy rule: nothing in
-    // Preload, so the budget path stays audio-free).
+    // Title → Enter (the real user gesture that unlocks audio) → M6 routes
+    // NEW GAME through the Intro taunt first: skip it with X (intro.spec.ts
+    // owns the sting; here it just must stop on exit) → Overworld lazy-loads
+    // and starts music.overworld (§2 lazy rule: nothing in Preload, so the
+    // budget path stays audio-free).
     await page.goto(BASE);
     await expect(page.locator('body[data-poc-ready="1"]')).toBeAttached({ timeout: 15_000 });
     await tap(page, 'Enter');
+    await expect(page.locator('body[data-poc-scene="Intro"]')).toBeAttached({ timeout: 10_000 });
+    await tap(page, 'x');
     await expect(page.locator('body[data-poc-scene="Overworld"]')).toBeAttached({
         timeout: 10_000
     });
@@ -149,22 +153,11 @@ test('audio: overworld music after Enter, boss music in the boss battle, zero 40
 // against the core sim), then north to the door and Enter. The door
 // dialogue's dismissal must start the boss battle.
 //
-// FIXME(engine, M4): the boss door is geometrically untriggerable, so this
-// stays fixme until Overworld.checkBossDoors (or the map) is fixed. The
-// walk itself is proven: both debug iterations got through the revenant
-// fight and back to the door wall; only the final trigger never fires.
-// Root cause, verified against Phaser 3.90 source + an on-wall ±3-tile
-// x-sweep of interact attempts: checkBossDoors inflates the door rect
-// (272,48,16,16) by only 6 px, so its reach ends at y=70, while the hero's
-// 16 px arcade body blocked by the row-3 wall can stand no higher than
-// center y=72 — 2 px short from every reachable position. The only spots
-// with center y ≤ 70 lie inside the 1-tile doorway pocket, whose 16 px gap
-// exactly equals the body width, demanding float-exact x=280.0 alignment
-// that velocity integration never produces. (The sign at (17,4) shares
-// dialogueId dlg-sign-door, so manual play still SEES door text — from the
-// sign — masking that the battle-start branch is unreachable.) Fix: inflate
-// by ≥ 10 px (body half-height 8 + margin), or widen the doorway/door rect;
-// then flip this fixme back to test.
+// History: at M4 this was a fixme — checkBossDoors inflated the door rect
+// by only 6 px, leaving its reach 2 px short of every position the hero's
+// 16 px arcade body could occupy against the row-3 wall (the co-located
+// dlg-sign-door sign masked it in manual play). The engine fix (inflate
+// 12 px ≥ body half-height 8 + margin) landed, and this test is live again.
 test('boss door: room4 walk + revenant fight + door dialogue starts the boss battle', async ({
     page
 }) => {

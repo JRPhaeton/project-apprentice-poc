@@ -12,10 +12,12 @@ import { animateEvents, createEnemyViews, type BattleView } from '../systems/bat
 import { MenuList } from '../systems/battle-menu';
 import type { GameDefs } from '../systems/content';
 import { runEnemyPhase } from '../systems/enemy-phase';
+import { backdropKeyFor, playBattleEntry, playVictoryFlash } from '../systems/fx';
 import { markOutcome, markScene } from '../systems/hooks';
 import { dur, toggleSpeed } from '../systems/pacing';
 import { isPaused, PauseController } from '../systems/pause';
 import { getRegistry, type GameRegistry } from '../systems/registry';
+import { addUiText } from '../systems/ui';
 import type { UIOverlay } from './UIOverlay';
 
 export class Battle extends Phaser.Scene {
@@ -30,6 +32,7 @@ export class Battle extends Phaser.Scene {
     private submenu!: MenuList;
     private freeActionUsed = false;
     private ended = false;
+    private backdropKey = '';
 
     constructor() {
         super('Battle');
@@ -70,17 +73,23 @@ export class Battle extends Phaser.Scene {
 
         // §2 lazy-load rule: battle sheets AND battle/boss music + SFX load
         // here, on first Battle entry, behind the same loading affordance.
+        // M6: the biome backdrop joins the same batch — picked by the room the
+        // battle started from; boss encounters always use the lair.
         const artIds = this.defs.encounters[this.request.encounterId].enemies.map(
             (defId) => this.defs.enemies[defId].artId
+        );
+        this.backdropKey = backdropKeyFor(
+            this.reg.get('room'),
+            this.defs.encounters[this.request.encounterId].boss
         );
         this.load.setBaseURL(import.meta.env.BASE_URL);
         for (const artId of artIds) {
             queueSheet(this.load, this.defs.art, artId);
         }
+        queueSheet(this.load, this.defs.art, this.backdropKey);
         ensureAudio(this, BATTLE_AUDIO_KEYS);
         if (this.load.list.size > 0) {
-            const loading = this.add
-                .text(128, 112, 'LOADING...', { fontFamily: 'monospace', fontSize: '8px', color: '#808080' })
+            const loading = addUiText(this, 128, 112, 'LOADING...', { color: 0x808080 })
                 .setOrigin(0.5)
                 .setDepth(1);
             this.load.once(Phaser.Loader.Events.COMPLETE, () => {
@@ -104,6 +113,12 @@ export class Battle extends Phaser.Scene {
             this,
             this.defs.encounters[this.request.encounterId].boss ? 'music.boss' : 'music.battle'
         );
+        // M6 presentation: biome backdrop behind the enemies (missing file →
+        // the dark base rect), then the shutter-bar entry transition on top.
+        if (this.textures.exists(this.backdropKey)) {
+            this.add.image(128, 72, this.backdropKey).setDepth(1);
+        }
+        playBattleEntry(this);
         const hero = this.reg.get('hero');
         this.state = createBattle(this.request.encounterId, hero, this.request.seed, {
             enemies: this.defs.enemies,
@@ -118,6 +133,8 @@ export class Battle extends Phaser.Scene {
         ui.pinBox(true);
         this.view = { scene: this, state: this.state, defs: this.defs, enemies, ui };
         ui.setHeroHud(hero.stats.hp, hero.stats.maxHp, hero.stats.mp, hero.stats.maxMp);
+        // M6 controls clarity: battle menu footer hint.
+        addUiText(this, 8, 169, 'ENTER CONFIRM  X BACK', { color: 0x606080 }).setDepth(5);
         const names = [...new Set([...enemies.keys()].map((id) => this.state.combatants[id].name))];
         ui.log(`${names.join(' and ')} attacks!`);
 
@@ -318,6 +335,7 @@ export class Battle extends Phaser.Scene {
             }
             stopMusic(this); // §6: music stops on win; fanfare stands alone
             playSfx(this, 'sfx.victory');
+            playVictoryFlash(this); // M6: victory screen flash
             this.ui().toast(`+${xp} XP`);
             autosave(this.reg); // autosave on battle victory (§4)
             await new Promise((r) => this.time.delayedCall(Math.max(1, dur(1000)), r));

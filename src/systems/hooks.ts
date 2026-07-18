@@ -10,7 +10,7 @@
  *                                 absent when stopped, locked, or files missing
  */
 
-export type SceneHookKey = 'Title' | 'Overworld' | 'Battle' | 'GameOver' | 'Victory';
+export type SceneHookKey = 'Title' | 'Intro' | 'Overworld' | 'Battle' | 'GameOver' | 'Victory';
 
 export function markReady(): void {
     document.body.dataset.pocReady = '1';

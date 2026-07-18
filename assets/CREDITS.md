@@ -1,8 +1,9 @@
 # Asset Credits & Licenses
 
-## M4 final art (current)
+## M6 final art (current)
 
 All shipped art is **generated programmatically by `tools/gen_placeholders.py`**
+with its helper modules `tools/pixelfont.py` and `tools/gen_backdrops.py`
 (the M2 placeholder generator evolved into the final-art generator —
 deterministic: no randomness, Bayer-matrix dithering and arithmetic detail
 placement only; re-running the script reproduces every file byte-for-byte).
@@ -12,19 +13,28 @@ dedicated to the public domain under **CC0 1.0 Universal**.
 
 | File | Size | Content | License |
 |---|---|---|---|
-| `public/assets/tilesets/overworld.png` | 256×16 | 16 overworld tiles 16×16 (0 grass, 1 path, 2 tree, 3 water, 4 wall, 5 sign, 6 flower, 7 dark-grass, 8 mud, 9 marsh-water, 10 reed, 11 ruin-floor, 12 ruin-wall, 13 ruin-door, 14 rubble/bones, 15 ember-glow) | CC0 (self-authored) |
-| `public/assets/sprites/hero-overworld.png` | 64×16 | 4 hero facings 16×16 (0 down, 1 up, 2 left, 3 right) | CC0 (self-authored) |
-| `public/assets/sprites/spider.png` | 448×64 | 7 battle frames 64×64 (idle ×2, step tell ×2, bite ×3) | CC0 (self-authored) |
-| `public/assets/sprites/wisp.png` | 448×64 | 7 battle frames 64×64 (idle ×2, cast ×2, attack ×3) | CC0 (self-authored) |
-| `public/assets/sprites/revenant.png` | 448×64 | 7 battle frames 64×64 (idle ×2, reassemble ×2, attack ×3) | CC0 (self-authored) |
-| `public/assets/sprites/chimera.png` | 1440×96 | 15 boss frames 96×96 (cloaked idle ×2 / attack ×3, uncloaked idle ×2 / attack ×3 / breath tell ×2 / flame breath ×3) | CC0 (self-authored) |
+| `public/assets/tilesets/overworld.png` | 256×16 | 16 overworld tiles 16×16 (0 grass, 1 path, 2 tree, 3 water, 4 wall, 5 sign, 6 flower, 7 dark-grass, 8 mud, 9 marsh-water, 10 reed, 11 ruin-floor, 12 ruin-wall, 13 ruin-door, 14 rubble/bones, 15 ember-glow); M6 deepened per-tile shading | CC0 (self-authored) |
+| `public/assets/sprites/hero-overworld.png` | 128×16 | 8 hero frames 16×16 — 2-frame walk per facing (0,1 down / 2,3 up / 4,5 left / 6,7 right) | CC0 (self-authored) |
+| `public/assets/sprites/spider.png` | 448×64 | 7 battle frames 64×64 (idle ×2, step tell ×2, bite ×3); M6 v3: 15-color ramps + rim light | CC0 (self-authored) |
+| `public/assets/sprites/wisp.png` | 448×64 | 7 battle frames 64×64 (idle ×2, cast ×2, attack ×3); M6 v3: 12-color ramps + rim shine | CC0 (self-authored) |
+| `public/assets/sprites/revenant.png` | 448×64 | 7 battle frames 64×64 (idle ×2, reassemble ×2, attack ×3); M6 v3: 15-color ramps + grave-light rim | CC0 (self-authored) |
+| `public/assets/sprites/chimera.png` | 1440×96 | 15 boss frames 96×96 (cloaked idle ×2 / attack ×3, uncloaked idle ×2 / attack ×3 / breath tell ×2 / flame breath ×3); M6 v3: full 16-color budget + rim light | CC0 (self-authored) |
+| `public/assets/sprites/tile-anim.png` | 96×16 | 6 shimmer frames 16×16 — pairs for water (0,1), marsh-water (2,3), ember-glow (4,5); frames 0/2/4 pixel-identical to tileset tiles 3/9/15 | CC0 (self-authored) |
+| `public/assets/sprites/ui-panel.png` | 48×48 | SNES-style 9-slice window (16px corners): dark edge, light bevel, 3-step blue-violet gradient frame, translucent navy fill | CC0 (self-authored) |
+| `public/assets/sprites/backdrops/forest.png` | 256×144 | Battle backdrop: deep green dusk, dithered sky, 3 tree silhouette layers, mossy platform | CC0 (self-authored) |
+| `public/assets/sprites/backdrops/marsh.png` | 256×144 | Battle backdrop: teal fog bands, reed silhouettes, pale wisp-glow spots, islet platform | CC0 (self-authored) |
+| `public/assets/sprites/backdrops/ruin.png` | 256×144 | Battle backdrop: cold grey-blue night, moon, breached wall, broken columns, flagstone platform | CC0 (self-authored) |
+| `public/assets/sprites/backdrops/lair.png` | 256×144 | Battle backdrop: near-black cavern, ember rain, warm under-glow, molten-crack platform (Emberheart motif) | CC0 (self-authored) |
+| `public/assets/fonts/font.png` + `font.fnt` | 128×48 | "EmberSpark" 8×8 pixel bitmap font, printable ASCII 32–126, white on transparency, BMFont XML metrics (lineHeight 9, base 7) | CC0 (self-authored) |
 
 Palette discipline (ART_BIBLE §2, verified by the script's self-checks):
 tileset drawn from one ≤ 32-color master pool with ≤ 16 colors per tile;
-every sprite sheet ≤ 16 unique colors; shared near-black-blue outline;
-warm ember accent reserved for the hero, interaction glints (sign nails,
-ruin-door glow), and the Chimera's fire. Tile indices 0–7 keep their M2
-identities; 8–15 are the M4 marsh/ruin extension.
+every sprite sheet, backdrop and UI texture ≤ 16 unique colors; shared
+near-black-blue outline; warm ember accent reserved for the hero,
+interaction glints (sign nails, ruin-door glow), and the Chimera's/lair's
+fire. Tile indices 0–7 keep their M2 identities; 8–15 are the M4
+marsh/ruin extension. The bitmap font is an original micro-font designed
+in-repo (distinct B/8, O/0, I/1/l); no third-party font data was used.
 
 ## M4 audio (current)
 

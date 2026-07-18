@@ -56,6 +56,8 @@ export interface OverworldMapData {
     spawn: { x: number; y: number };
     /** Tile layers with collide=true tiles (physics colliders for the hero). */
     collisionLayers: Phaser.Tilemaps.TilemapLayer[];
+    /** ALL created tile layers, in render order (M6 tile-shimmer scan). */
+    tileLayers: Phaser.Tilemaps.TilemapLayer[];
     encounters: EncounterZone[];
     signs: SignZone[];
     exits: ExitZone[];
@@ -99,6 +101,7 @@ function buildFromTilemap(scene: Phaser.Scene, key: string): OverworldMapData {
     const tileset = map.addTilesetImage('overworld', 'tiles.overworld');
 
     const collisionLayers: Phaser.Tilemaps.TilemapLayer[] = [];
+    const tileLayers: Phaser.Tilemaps.TilemapLayer[] = [];
     if (tileset) {
         for (const layerData of map.layers) {
             const layer = map.createLayer(layerData.name, tileset, 0, 0);
@@ -107,6 +110,7 @@ function buildFromTilemap(scene: Phaser.Scene, key: string): OverworldMapData {
             }
             layer.setCollisionByProperty({ collide: true });
             collisionLayers.push(layer);
+            tileLayers.push(layer);
         }
     }
 
@@ -150,6 +154,7 @@ function buildFromTilemap(scene: Phaser.Scene, key: string): OverworldMapData {
         heightPx: map.heightInPixels,
         spawn,
         collisionLayers,
+        tileLayers,
         encounters,
         signs,
         exits,
@@ -170,10 +175,12 @@ function buildFallback(scene: Phaser.Scene): OverworldMapData {
         heightPx: h,
         spawn: { x: 128, y: 224 },
         collisionLayers: [],
+        tileLayers: [],
         encounters: [
             { encounterId: 'enc-spider', rect: new Phaser.Geom.Rectangle(320, 160, 64, 64), armed: false }
         ],
-        signs: [{ dialogueId: 'sign-gate', rect: new Phaser.Geom.Rectangle(96, 48, 16, 16) }],
+        // M6 unified dlg-* IDs (GDD amendment 2 debt cleared).
+        signs: [{ dialogueId: 'dlg-sign-gate', rect: new Phaser.Geom.Rectangle(96, 48, 16, 16) }],
         exits: [],
         bossDoors: []
     };

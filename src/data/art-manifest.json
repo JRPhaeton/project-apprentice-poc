@@ -47,10 +47,50 @@
         "frameWidth": 16,
         "frameHeight": 16,
         "anims": {
-            "down": { "frames": [0], "frameRate": 1, "repeat": -1 },
-            "up": { "frames": [1], "frameRate": 1, "repeat": -1 },
-            "left": { "frames": [2], "frameRate": 1, "repeat": -1 },
-            "right": { "frames": [3], "frameRate": 1, "repeat": -1 }
+            "down": { "frames": [0, 1], "frameRate": 6, "repeat": -1 },
+            "up": { "frames": [2, 3], "frameRate": 6, "repeat": -1 },
+            "left": { "frames": [4, 5], "frameRate": 6, "repeat": -1 },
+            "right": { "frames": [6, 7], "frameRate": 6, "repeat": -1 }
+        }
+    },
+    "backdrop.forest": {
+        "file": "assets/sprites/backdrops/forest.png",
+        "frameWidth": 256,
+        "frameHeight": 144,
+        "anims": {}
+    },
+    "backdrop.marsh": {
+        "file": "assets/sprites/backdrops/marsh.png",
+        "frameWidth": 256,
+        "frameHeight": 144,
+        "anims": {}
+    },
+    "backdrop.ruin": {
+        "file": "assets/sprites/backdrops/ruin.png",
+        "frameWidth": 256,
+        "frameHeight": 144,
+        "anims": {}
+    },
+    "backdrop.lair": {
+        "file": "assets/sprites/backdrops/lair.png",
+        "frameWidth": 256,
+        "frameHeight": 144,
+        "anims": {}
+    },
+    "ui.panel": {
+        "file": "assets/sprites/ui-panel.png",
+        "frameWidth": 48,
+        "frameHeight": 48,
+        "anims": {}
+    },
+    "tile.anim": {
+        "file": "assets/sprites/tile-anim.png",
+        "frameWidth": 16,
+        "frameHeight": 16,
+        "anims": {
+            "water": { "frames": [0, 1], "frameRate": 2, "repeat": -1 },
+            "marshwater": { "frames": [2, 3], "frameRate": 2, "repeat": -1 },
+            "ember": { "frames": [4, 5], "frameRate": 2, "repeat": -1 }
         }
     }
 }

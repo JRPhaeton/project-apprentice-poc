@@ -2,13 +2,15 @@ import Phaser from 'phaser';
 
 import { playSfx } from './audio';
 import { isPaused } from './pause';
+import { addPanel, addUiText, type UiPanel, type UiText } from './ui';
 
 /**
  * Keyboard-driven menu list for the Battle scene: arrows + Enter/Z confirm,
  * X/Esc cancel, disabled entries greyed and unselectable. The cursor resets
  * to the FIRST entry on every open() — QA's E2E relies on bare Enter meaning
  * ATTACK at the start of every hero turn. All handlers are dead while the
- * game is paused (§8); cursor moves blip sfx.menu (§6 SFX mapping).
+ * game is paused (§8); cursor moves blip sfx.menu (§6 SFX mapping). M6:
+ * chrome panel + bitmap rows via the UI kit (rect/monospace fallback).
  */
 
 export interface MenuItem {
@@ -31,9 +33,9 @@ export class MenuList {
     private readonly x: number;
     private readonly y: number;
     private readonly width: number;
-    private bg: Phaser.GameObjects.Rectangle | null = null;
-    private rows: Phaser.GameObjects.Text[] = [];
-    private cursor: Phaser.GameObjects.Text | null = null;
+    private bg: UiPanel | null = null;
+    private rows: UiText[] = [];
+    private cursor: UiText | null = null;
     private items: MenuItem[] = [];
     private index = 0;
     private opts: MenuOpenOpts | null = null;
@@ -56,28 +58,16 @@ export class MenuList {
         this.index = 0;
 
         const h = this.items.length * ROW_H + PAD * 2;
-        this.bg = this.scene.add
-            .rectangle(this.x, this.y, this.width, h, 0x101020, 0.92)
-            .setOrigin(0, 0)
-            .setStrokeStyle(1, 0x8080a0)
-            .setDepth(50)
-            .setScrollFactor(0);
+        this.bg = addPanel(this.scene, this.x, this.y, this.width, h);
+        this.bg.setDepth(50).setScrollFactor(0);
         this.rows = this.items.map((item, i) =>
-            this.scene.add
-                .text(this.x + PAD + 8, this.y + PAD + i * ROW_H, item.label, {
-                    fontFamily: 'monospace',
-                    fontSize: '8px',
-                    color: item.enabled ? '#e0e0e0' : '#606060'
-                })
+            addUiText(this.scene, this.x + PAD + 8, this.y + PAD + i * ROW_H, item.label, {
+                color: item.enabled ? 0xe0e0e0 : 0x606060
+            })
                 .setDepth(51)
                 .setScrollFactor(0)
         );
-        this.cursor = this.scene.add
-            .text(this.x + PAD, this.y + PAD, '>', {
-                fontFamily: 'monospace',
-                fontSize: '8px',
-                color: '#ffff80'
-            })
+        this.cursor = addUiText(this.scene, this.x + PAD, this.y + PAD, '>', { color: 0xffff80 })
             .setDepth(51)
             .setScrollFactor(0);
         this.moveCursor(0);

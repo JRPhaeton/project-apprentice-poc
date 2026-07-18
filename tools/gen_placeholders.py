@@ -1,28 +1,36 @@
 #!/usr/bin/env python3
-"""Deterministic FINAL-art generator — Assets lane (M4 art pass).
+"""Deterministic FINAL-art generator — Assets lane (M6 presentation pass).
 
 Evolved from the M2 placeholder generator under the same deterministic
 contract: no randomness anywhere — dithering is Bayer-matrix arithmetic and
 all detail placement is pure arithmetic, so re-running reproduces every file
-byte-for-byte. Generates the shipping art set per docs/ART_BIBLE.md (LOCKED):
-same sheets, dimensions, frame counts and manifest logical IDs as M2,
-materially better pixels, plus the M4 tileset extension to 16 tiles.
+byte-for-byte. Generates the shipping art set per docs/ART_BIBLE.md (LOCKED
+dims; M6 amendment: hero overworld gains a 2-frame walk per facing).
 
 Outputs (all self-authored, CC0 — see assets/CREDITS.md):
   public/assets/tilesets/overworld.png      256x16  16 tiles 16x16
       0 grass, 1 path, 2 tree, 3 water, 4 wall, 5 sign, 6 flower,
       7 dark-grass, 8 mud, 9 marsh-water, 10 reed, 11 ruin-floor,
       12 ruin-wall, 13 ruin-door, 14 rubble-bones, 15 ember-glow
-  public/assets/sprites/hero-overworld.png   64x16   4 frames 16x16
+  public/assets/sprites/hero-overworld.png  128x16   8 frames 16x16
+      0,1 down / 2,3 up / 4,5 left / 6,7 right (2-frame walk each)
   public/assets/sprites/spider.png          448x64   7 frames 64x64
   public/assets/sprites/wisp.png            448x64   7 frames 64x64
   public/assets/sprites/revenant.png        448x64   7 frames 64x64
   public/assets/sprites/chimera.png        1440x96  15 frames 96x96
+  public/assets/sprites/tile-anim.png        96x16   6 frames 16x16
+      0,1 water / 2,3 marsh-water / 4,5 ember-glow shimmer pairs; frames
+      0/2/4 are pixel-identical to tileset tiles 3/9/15 (overlay blending)
+  public/assets/sprites/ui-panel.png         48x48  SNES 9-slice window
+  public/assets/sprites/backdrops/{forest,marsh,ruin,lair}.png  256x144
+  public/assets/fonts/font.png              128x48  8x8 bitmap font
+  public/assets/fonts/font.fnt              BMFont XML (Phaser-compatible)
 
 Palette discipline (ART_BIBLE §2): the tileset draws from one <=32-color
-master pool with <=16 colors per 16x16 tile; every sprite sheet <=16 colors;
-shared near-black-blue outline across battle sprites; the warm ember accent
-is reserved for the hero, interaction glints, and the Chimera's fire.
+master pool with <=16 colors per 16x16 tile; every sprite sheet, backdrop
+and UI texture <=16 colors; shared near-black-blue outline across battle
+sprites; the warm ember accent is reserved for the hero, interaction
+glints, and the Chimera's/lair's fire.
 
 Run from anywhere:  python3 tools/gen_placeholders.py
 Exit code is non-zero if any self-check fails.
@@ -34,10 +42,17 @@ import sys
 
 from PIL import Image, ImageDraw
 
+sys.dont_write_bytecode = True  # keep tools/ free of __pycache__
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import gen_backdrops  # noqa: E402  (sibling module, deterministic)
+import pixelfont  # noqa: E402
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PUB = os.path.join(ROOT, "public")
 TILESETS = os.path.join(PUB, "assets", "tilesets")
 SPRITES = os.path.join(PUB, "assets", "sprites")
+BACKDROPS_DIR = os.path.join(SPRITES, "backdrops")
+FONTS = os.path.join(PUB, "assets", "fonts")
 ART_MANIFEST = os.path.join(ROOT, "src", "data", "art-manifest.json")
 
 OUTLINE = (20, 22, 40, 255)  # near-black blue: shared outline + tile "void"
@@ -56,12 +71,16 @@ def new_img(w, h, bg=(0, 0, 0, 0)):
 def dither(px, x0, y0, x1, y1, color, level, ox=0, oy=0, only=None):
     """Ordered-dither overlay: paint `color` on `level`/16 of the pixels in
     the inclusive rect, by Bayer threshold. `only` restricts painting to
-    pixels currently equal to that color (region-safe shading)."""
-    for y in range(y0, y1 + 1):
-        for x in range(x0, x1 + 1):
+    pixels currently equal to that color (region-safe shading). Coordinates
+    outside the image are skipped (never wrapped)."""
+    for y in range(max(0, y0), y1 + 1):
+        for x in range(max(0, x0), x1 + 1):
             if BAYER4[(y + oy) & 3][(x + ox) & 3] < level:
-                if only is None or px[x, y] == only:
-                    px[x, y] = color
+                try:
+                    if only is None or px[x, y] == only:
+                        px[x, y] = color
+                except IndexError:
+                    break  # past the right/bottom edge of this image
 
 
 def glow_ring(px, w, h, cx, cy, r0, r1, color, level):
@@ -92,6 +111,33 @@ def leg(d, hip, foot, lift, color, width=2):
     ky = min(hip[1], foot[1]) - lift
     d.line([hip, (kx, ky)], fill=color, width=width)
     d.line([(kx, ky), foot], fill=color, width=width)
+
+
+def rim_light(t, mapping, dirs=((0, -1), (-1, 0))):
+    """SNES rim light: recolor body pixels sitting just inside the shared
+    OUTLINE wherever that outline faces transparency on the lit (top/left)
+    side. `mapping` limits the pass to body colors -> their rim tones, so
+    glows/effects are never touched. Deterministic single pass."""
+    px = t.load()
+    w, h = t.size
+
+    def clear(x, y):
+        return not (0 <= x < w and 0 <= y < h) or px[x, y][3] == 0
+
+    hits = []
+    for y in range(h):
+        for x in range(w):
+            if px[x, y] != OUTLINE:
+                continue
+            for dx, dy in dirs:
+                if clear(x + dx, y + dy):
+                    nx, ny = x - dx, y - dy
+                    if 0 <= nx < w and 0 <= ny < h and px[nx, ny] in mapping:
+                        hits.append((nx, ny, mapping[px[nx, ny]]))
+                    break
+    for x, y, c in hits:
+        px[x, y] = c
+    return t
 
 
 # ---------------------------------------------------------------------------
@@ -144,12 +190,14 @@ def grass_tile(base, lt, dk, salt, n_blades=6):
     px = t.load()
     dither(px, 0, 0, 15, 15, lt, 3, ox=salt, oy=salt * 2)
     dither(px, 0, 9, 15, 15, dk, 2, ox=salt + 2, oy=salt)
+    dither(px, 0, 13, 15, 15, dk, 4, ox=salt + 1, oy=salt + 2)  # settled shade
     for k in range(n_blades):
         x = (k * 5 + salt * 3) % 14 + 1
         y = (k * 7 + salt * 5) % 11 + 2
         px[x, y] = dk
         px[x, min(15, y + 1)] = dk
         px[x, y - 1] = lt
+        px[min(15, x + 1), min(15, y + 2)] = dk  # blade ground shadow
     return t
 
 
@@ -163,14 +211,16 @@ def t_path():
     d = ImageDraw.Draw(t)
     dither(px, 0, 0, 15, 5, T["sand_lt"], 4)
     dither(px, 0, 10, 15, 15, T["sand_dk"], 4, ox=1)
-    # wheel-rut dashes
+    # wheel-rut dashes with settled shadow beneath
     d.line([(2, 8), (5, 8)], fill=T["sand_dk"])
     d.line([(9, 8), (12, 8)], fill=T["sand_dk"])
-    # pebbles: dark stone with a light catch
+    dither(px, 2, 9, 12, 9, T["sand_dk"], 6, only=T["sand"])
+    # pebbles: dark stone with a light catch + mud_lt half-tone
     for (x, y) in ((3, 4), (10, 6), (13, 12), (5, 12)):
         px[x, y] = T["mud"]
         px[x + 1, y] = T["mud_dk"]
         px[x, y - 1] = T["sand_lt"]
+        px[max(0, x - 1), y] = T["mud_lt"]
     return t
 
 
@@ -187,26 +237,35 @@ def t_tree():
     d.ellipse([3, 1, 8, 5], fill=T["canopy_lt"])
     dither(px, 2, 4, 13, 11, T["canopy"], 5, only=T["canopy_dk"])
     dither(px, 3, 1, 11, 6, T["canopy_lt"], 4, only=T["canopy"])
+    # canopy drop shadow pooling on the grass below
+    dither(px, 2, 12, 13, 15, T["canopy_dk"], 4, ox=1, only=T["grass"])
+    dither(px, 3, 12, 12, 14, T["grass_dk"], 6, only=T["grass_lt"])
+    # trunk knot
+    px[8, 12] = T["mud_dk"]
     # leaf notches at the rim
     for (x, y) in ((1, 4), (14, 6), (4, 12), (11, 12)):
         px[x, y] = T["canopy_dk"]
     return t
 
 
-def t_water():
+def t_water(phase=0):
+    """Animated pair tile: base pixels identical across phases, only the
+    crest highlights + sparkles drift (tile-anim overlay blends seamlessly)."""
     t = tile_base(T["water"])
     px = t.load()
     d = ImageDraw.Draw(t)
     dither(px, 0, 0, 15, 5, T["water_lt"], 3)
     dither(px, 0, 8, 15, 15, T["water_dk"], 6, ox=2)
     dither(px, 0, 13, 15, 15, T["water_dk"], 10, ox=1)
-    # broken wave crests
-    d.line([(1, 3), (5, 3)], fill=T["water_lt"])
-    d.line([(8, 3), (11, 3)], fill=T["water_lt"])
-    d.line([(4, 9), (7, 9)], fill=T["water_lt"])
-    d.line([(11, 9), (14, 9)], fill=T["water_lt"])
-    px[2, 2] = T["fl_white"]
-    px[9, 8] = T["fl_white"]
+    dither(px, 0, 14, 15, 15, T["void"], 4, ox=3, only=T["water_dk"])  # depth
+    # broken wave crests (drift right by 2 on the alternate frame)
+    s = phase * 2
+    d.line([(1 + s, 3), (5 + s, 3)], fill=T["water_lt"])
+    d.line([(8 + s, 3), (min(15, 11 + s), 3)], fill=T["water_lt"])
+    d.line([(4 - s, 9), (7 - s, 9)], fill=T["water_lt"])
+    d.line([(11 - s, 9), (14 - s, 9)], fill=T["water_lt"])
+    px[2 + s * 2, 2] = T["fl_white"]
+    px[9 - s * 3, 8] = T["fl_white"]
     return t
 
 
@@ -227,9 +286,14 @@ def t_wall():
                 d.line([(prev + 1, y0), (jx - 1, y0)], fill=T["stone_lt"])
             prev = jx
         dither(px, 0, y0 + 2, 15, y0 + 2, T["stone_dk"], 5, oy=row)
+        dither(px, 0, y0 + 1, 15, y0 + 2, T["stone_lt"], 2, ox=row, only=T["stone"])
     # a crack in one stone
     d.line([(9, 5), (10, 6)], fill=T["stone_dk"])
     px[10, 5] = T["stone_dk"]
+    # moss creeping into two mortar seams
+    for (mx, my) in ((3, 7), (4, 7), (12, 11), (7, 15)):
+        px[mx, my] = T["grass_dk"]
+    px[3, 6] = T["grass"]
     return t
 
 
@@ -241,10 +305,15 @@ def t_sign():
     d.line([(5, 15), (10, 15)], fill=T["grass_dk"])
     d.rectangle([7, 8, 8, 15], fill=T["trunk"])
     d.line([(7, 8), (7, 14)], fill=T["trunk_lt"])
-    # board: frame + lighter face + text dashes
+    # board: grained frame + lighter face + text dashes
     d.rectangle([2, 1, 13, 8], fill=T["trunk"])
+    px[3, 1] = T["trunk_lt"]
+    px[6, 1] = T["trunk_lt"]
+    px[10, 8] = T["mud_dk"]
+    px[4, 8] = T["mud_dk"]
     d.rectangle([3, 2, 12, 7], fill=T["sand"])
     dither(px, 3, 2, 12, 7, T["sand_lt"], 3)
+    dither(px, 3, 6, 12, 7, T["sand_dk"], 3, ox=1, only=T["sand"])  # face shade
     d.line([(4, 3), (10, 3)], fill=T["mud_dk"])
     d.line([(4, 5), (11, 5)], fill=T["mud_dk"])
     # ember interaction glints (nails)
@@ -288,27 +357,36 @@ def t_mud():
     d.ellipse([9, 3, 14, 6], fill=T["mud_dk"])
     px[3, 9] = T["marsh_lt"]
     px[10, 4] = T["marsh_lt"]
-    # dried streaks
+    # dried streaks + a shrinkage crack
     d.line([(3, 2), (6, 2)], fill=T["mud_lt"])
     d.line([(11, 13), (14, 13)], fill=T["mud_lt"])
+    d.line([(6, 13), (8, 15)], fill=T["mud_dk"])
+    px[7, 13] = T["void"]
+    px[8, 14] = T["void"]
     return t
 
 
-def t_marsh_water():
+def t_marsh_water(phase=0):
+    """Animated pair tile: base + reeds identical, ripples drift + reed tips
+    catch light on the alternate frame."""
     t = tile_base(T["marsh"])
     px = t.load()
     d = ImageDraw.Draw(t)
     dither(px, 0, 0, 15, 4, T["marsh_lt"], 2)
     dither(px, 0, 6, 15, 15, T["marsh_dk"], 6, ox=1)
     dither(px, 0, 12, 15, 15, T["marsh_dk"], 10, ox=3)
-    # dull broken ripples
-    d.line([(2, 4), (5, 4)], fill=T["marsh_lt"])
-    d.line([(9, 10), (12, 10)], fill=T["marsh_lt"])
+    dither(px, 0, 14, 15, 15, T["void"], 4, ox=2, only=T["marsh_dk"])  # depth
+    # dull broken ripples (slide on the alternate frame)
+    s = phase * 2
+    d.line([(2 + s, 4), (5 + s, 4)], fill=T["marsh_lt"])
+    d.line([(9 - s, 10), (12 - s, 10)], fill=T["marsh_lt"])
     # reed hints poking through
     d.line([(3, 9), (3, 15)], fill=T["reed_dk"])
-    px[3, 8] = T["reed"]
+    px[3, 8] = T["reed_dk"] if phase else T["reed"]
+    px[3, 7] = T["reed"] if phase else px[3, 7]
     d.line([(12, 11), (12, 15)], fill=T["reed_dk"])
-    px[12, 10] = T["reed"]
+    px[12, 10] = T["reed_dk"] if phase else T["reed"]
+    px[12, 9] = T["reed"] if phase else px[12, 9]
     px[2, 10] = T["marsh_dk"]
     px[13, 12] = T["marsh_dk"]
     return t
@@ -323,15 +401,19 @@ def t_reed():
     # reflections at the waterline
     d.line([(1, 13), (3, 13)], fill=T["marsh_lt"])
     d.line([(8, 14), (10, 14)], fill=T["marsh_lt"])
-    # stalks: lit reed with dark flicks, two cattail heads
+    # stalks: lit reed with dark flicks, two cattail heads, rooted shadows
     for (x, top, head) in ((2, 5, 0), (6, 2, 1), (10, 5, 1), (13, 8, 0)):
         d.line([(x, top), (x, 15)], fill=T["reed"])
         px[x + 1, min(15, top + 4)] = T["reed_dk"]
         px[x + 1, min(15, top + 8)] = T["reed_dk"]
         px[x - 1, top + 1] = T["reed_dk"]  # leaf flick
+        px[x, 15] = T["reed_dk"]  # rooted in shadow
+        if x + 1 <= 15:
+            px[x + 1, 14] = T["void"]  # waterline root shadow
         if head:
             d.rectangle([x, top, x, top + 2], fill=T["trunk"])
             px[x, top - 1] = T["reed_dk"]
+            px[x, top] = T["trunk_lt"]  # sunlit cattail cap
     return t
 
 
@@ -349,10 +431,13 @@ def t_ruin_floor():
     # slab top-left bevels
     for (bx, by) in ((0, 0), (6, 0), (12, 0), (0, 8), (3, 8), (9, 8)):
         d.line([(bx, by), (bx + 1, by)], fill=T["stone_lt"])
-    # crack + chipped corner
+    # crack with deep core + chipped corner
     d.line([(3, 2), (4, 4)], fill=T["stone_dk"])
     d.line([(4, 4), (3, 6)], fill=T["stone_dk"])
+    px[4, 4] = T["void"]
     px[4, 2] = T["stone_lt"]
+    # settled dust shading the lower slab row
+    dither(px, 0, 12, 15, 15, T["stone_dk"], 4, ox=2, only=T["stone"])
     # moss in the seams
     px[6, 6] = T["grass_dk"]
     px[12, 9] = T["grass_dk"]
@@ -376,11 +461,15 @@ def t_ruin_wall():
             d.line([(jx, y0 + 1), (jx, y0 + 6)], fill=T["void"])
             if jx < 15:
                 d.line([(jx + 1, y0 + 1), (jx + 1, y0 + 2)], fill=T["stone"])
-    # crack + one chipped highlight
+    # crack + chipped highlights + moss in the deep mortar
     d.line([(11, 9), (12, 11)], fill=T["void"])
     d.line([(12, 11), (11, 13)], fill=T["void"])
     px[2, 2] = T["stone_lt"]
     px[10, 10] = T["stone"]
+    px[13, 2] = T["stone_lt"]
+    px[5, 7] = T["grass_dk"]
+    px[6, 7] = T["grass_dk"]
+    px[12, 15] = T["grass_dk"]
     return t
 
 
@@ -409,6 +498,7 @@ def t_ruin_door():
     px[7, 15] = T["ember"]
     px[9, 15] = T["ember"]
     dither(px, 5, 13, 11, 15, T["ember_dk"], 3, only=T["void"])
+    dither(px, 6, 9, 10, 12, T["ember_dk"], 2, ox=1, only=T["void"])  # rising heat
     return t
 
 
@@ -425,19 +515,25 @@ def t_rubble():
     px[11, 4] = T["stone_lt"]
     d.line([(3, 13), (7, 12)], fill=T["void"])
     d.line([(9, 6), (12, 7)], fill=T["void"])
-    # bones: femur, rib arc, a scattered joint
+    # bones: femur, rib arc, a scattered joint — each casting a void shadow
     d.line([(4, 3), (7, 4)], fill=T["bone"])
     px[3, 3] = T["bone"]
     px[4, 2] = T["bone"]
     px[8, 4] = T["bone"]
     px[8, 5] = T["bone"]
+    px[5, 5] = T["void"]
+    px[6, 5] = T["void"]
     d.arc([10, 10, 15, 15], 180, 300, fill=T["bone"])
     px[13, 13] = T["stone"]
+    px[11, 14] = T["void"]
     px[1, 6] = T["bone"]
+    px[1, 7] = T["void"]
     return t
 
 
-def t_ember_glow():
+def t_ember_glow(phase=0):
+    """Animated pair tile: rock + crack network identical, the glow pulses
+    (node heat swaps, halo breathes, sparks rise) on the alternate frame."""
     t = tile_base(T["stone_dk"])
     px = t.load()
     d = ImageDraw.Draw(t)
@@ -446,19 +542,21 @@ def t_ember_glow():
     d.line([(0, 3), (4, 3)], fill=T["void"])
     d.line([(11, 12), (15, 12)], fill=T["void"])
     # glowing crack network, hot at the nodes
+    hot, cool = (T["ember_lt"], T["ember"]) if phase == 0 else (T["ember"], T["ember_lt"])
     d.line([(1, 10), (5, 8)], fill=T["ember"])
     d.line([(5, 8), (8, 9)], fill=T["ember"])
     d.line([(8, 9), (11, 6)], fill=T["ember"])
-    d.line([(11, 6), (14, 7)], fill=T["ember_dk"])
+    d.line([(11, 6), (14, 7)], fill=T["ember_dk"] if phase == 0 else T["ember"])
     d.line([(5, 8), (6, 12)], fill=T["ember_dk"])
     d.line([(11, 6), (12, 3)], fill=T["ember_dk"])
-    px[8, 9] = T["ember_lt"]
-    px[11, 6] = T["ember_lt"]
-    # warm dithered halo hugging the crack
-    dither(px, 2, 6, 13, 11, T["ember_dk"], 2, only=T["stone_dk"])
-    # drifting sparks
-    px[4, 4] = T["ember_lt"]
-    px[13, 13] = T["ember"]
+    px[8, 9] = hot
+    px[11, 6] = cool if phase else hot
+    px[5, 8] = hot if phase else T["ember"]
+    # warm dithered halo hugging the crack (breathes wider on the pulse)
+    dither(px, 2, 6, 13, 11, T["ember_dk"], 2 + phase, only=T["stone_dk"])
+    # drifting sparks (rise one pixel on the pulse)
+    px[4, 4 - phase] = T["ember_lt"]
+    px[13, 13 - phase] = T["ember"]
     return t
 
 
@@ -475,7 +573,9 @@ def gen_tileset():
 
 
 # ---------------------------------------------------------------------------
-# 2. Hero overworld — 4 frames 16x16: 0 down, 1 up, 2 left, 3 right
+# 2. Hero overworld — 8 frames 16x16: 0,1 down / 2,3 up / 4,5 left / 6,7
+#    right. Each pair is a 2-frame walk: alternating foot stance, cloak-hem
+#    sway and a 1px head bob (M6 amendment to the locked ART_BIBLE dims).
 
 HERO_PAL = {
     "cloak_dk": (44, 50, 70, 255),
@@ -488,62 +588,84 @@ HERO_PAL = {
 }
 
 
-def hero_frame(facing):
+def hero_frame(facing, step=0):
     t = new_img(16, 16)
     d = ImageDraw.Draw(t)
     px = t.load()
     P = HERO_PAL
-    # silhouette: hood + cloak body, outlined
-    d.polygon([(4, 7), (11, 7), (13, 15), (2, 15)], fill=P["cloak"], outline=OUTLINE)
-    d.ellipse([3, 1, 12, 9], fill=P["cloak"], outline=OUTLINE)
+    b = 1 if step else 0  # head bob on the off-step
+    sw = 1 if step else 0  # cloak-hem sway
+    side = facing in ("left", "right")
+    lead = -1 if facing == "left" else 1
+    # silhouette: cloak body (hem corners sway with the stride) + hood
+    d.polygon(
+        [(4, 7), (11, 7), (13 + (sw if not side else sw * lead), 15), (2 - (sw if not side else -sw * lead), 15)],
+        fill=P["cloak"],
+        outline=OUTLINE,
+    )
+    d.ellipse([3, 1 + b, 12, 9 + b], fill=P["cloak"], outline=OUTLINE)
     # 3-tone cloak: lit left, shaded right
     d.line([(4, 8), (3, 14)], fill=P["cloak_lt"])
     d.line([(5, 8), (4, 14)], fill=P["cloak_lt"])
     d.line([(11, 8), (12, 14)], fill=P["cloak_dk"])
     d.line([(10, 8), (11, 14)], fill=P["cloak_dk"])
-    d.line([(4, 2), (4, 5)], fill=P["cloak_lt"])  # hood rim light
-    # ember hem trim — hope-coded warm accent, dashed so it stays an accent
-    for hx in range(3, 13, 2):
+    d.line([(4, 2 + b), (4, 5 + b)], fill=P["cloak_lt"])  # hood rim light
+    # ember hem trim — hope-coded warm accent, dashes swing with the stride
+    for hx in range(3 + sw, 13, 2):
         px[hx, 14] = P["ember"]
-    # boots
-    px[5, 15] = OUTLINE
-    px[6, 15] = OUTLINE
-    px[9, 15] = OUTLINE
-    px[10, 15] = OUTLINE
+    # boots: alternating stance per step (the 2-frame walk read)
+    if not side:
+        feet = ((5, 6, 9, 10), (4, 5, 10, 11))[step]
+        for fx in feet:
+            px[fx, 15] = OUTLINE
+    else:
+        if step == 0:
+            for fx in (5, 6, 9, 10):
+                px[fx, 15] = OUTLINE
+        else:  # stride: lead foot reaches, trail foot pushes off
+            for fx in (7 + lead * 3, 8 + lead * 3):
+                px[fx, 15] = OUTLINE
+            px[7 - lead * 2, 15] = OUTLINE
+            px[7 - lead * 2, 14] = OUTLINE  # heel lifted
     if facing == "down":
-        d.rectangle([5, 4, 10, 6], fill=P["skin"])
-        d.line([(5, 6), (10, 6)], fill=P["skin_dk"])
-        px[6, 5] = OUTLINE
-        px[9, 5] = OUTLINE
-        d.line([(5, 3), (10, 3)], fill=P["cloak_dk"])  # hood brim shadow
+        d.rectangle([5, 4 + b, 10, 6 + b], fill=P["skin"])
+        d.line([(5, 6 + b), (10, 6 + b)], fill=P["skin_dk"])
+        px[6, 5 + b] = OUTLINE
+        px[9, 5 + b] = OUTLINE
+        d.line([(5, 3 + b), (10, 3 + b)], fill=P["cloak_dk"])  # hood brim shadow
         px[7, 8] = P["ember"]  # clasp
         px[8, 8] = P["ember_lt"]
-        d.line([(8, 9), (8, 13)], fill=P["cloak_dk"])  # cloak split
+        d.line([(8, 9), (8 + sw, 13)], fill=P["cloak_dk"])  # cloak split sways
     elif facing == "up":
-        d.line([(8, 2), (8, 8)], fill=P["cloak_dk"])  # hood back seam
-        d.ellipse([5, 2, 8, 5], fill=P["cloak_lt"])  # hood sheen
+        d.line([(8, 2 + b), (8, 8)], fill=P["cloak_dk"])  # hood back seam
+        d.ellipse([5, 2 + b, 8, 5 + b], fill=P["cloak_lt"])  # hood sheen
         d.line([(6, 10), (9, 10)], fill=P["cloak_dk"])  # shoulder crease
+        if step:  # pack strap catches light mid-stride
+            px[10, 10] = P["cloak_lt"]
     elif facing == "left":
-        d.rectangle([4, 4, 7, 6], fill=P["skin"])
-        px[5, 5] = OUTLINE
-        d.line([(4, 6), (7, 6)], fill=P["skin_dk"])
-        d.line([(8, 3), (10, 7)], fill=P["cloak_dk"])  # hood profile fold
+        d.rectangle([4, 4 + b, 7, 6 + b], fill=P["skin"])
+        px[5, 5 + b] = OUTLINE
+        d.line([(4, 6 + b), (7, 6 + b)], fill=P["skin_dk"])
+        d.line([(8, 3 + b), (10, 7 + b)], fill=P["cloak_dk"])  # hood profile fold
         px[4, 8] = P["ember"]  # clasp at the throat
-        d.line([(10, 9), (12, 13)], fill=P["cloak_dk"])  # trailing hem
+        d.line([(10, 9), (12 + sw, 13)], fill=P["cloak_dk"])  # trailing hem swings
     else:  # right
-        d.rectangle([8, 4, 11, 6], fill=P["skin"])
-        px[10, 5] = OUTLINE
-        d.line([(8, 6), (11, 6)], fill=P["skin_dk"])
-        d.line([(7, 3), (5, 7)], fill=P["cloak_lt"])
+        d.rectangle([8, 4 + b, 11, 6 + b], fill=P["skin"])
+        px[10, 5 + b] = OUTLINE
+        d.line([(8, 6 + b), (11, 6 + b)], fill=P["skin_dk"])
+        d.line([(7, 3 + b), (5, 7 + b)], fill=P["cloak_lt"])
         px[11, 8] = P["ember"]
-        d.line([(5, 9), (3, 13)], fill=P["cloak_dk"])
+        d.line([(5, 9), (3 - sw, 13)], fill=P["cloak_dk"])
     return t
 
 
 def gen_hero():
-    img = new_img(64, 16)
-    for i, facing in enumerate(("down", "up", "left", "right")):
-        img.paste(hero_frame(facing), (i * 16, 0))
+    img = new_img(128, 16)
+    i = 0
+    for facing in ("down", "up", "left", "right"):
+        for step in (0, 1):
+            img.paste(hero_frame(facing, step), (i * 16, 0))
+            i += 1
     return img
 
 
@@ -552,28 +674,36 @@ def gen_hero():
 #     Forward (toward hero) = +x. Per-frame leg gait for articulation.
 
 SPIDER_PAL = {
+    "moss_deep": (34, 44, 28, 255),
     "moss_dk": (52, 64, 38, 255),
     "moss": (76, 92, 56, 255),
     "moss_lt": (102, 120, 74, 255),
     "pale": (128, 146, 96, 255),
+    "pale_lt": (152, 170, 118, 255),
     "bone": (198, 190, 162, 255),
     "bone_dk": (150, 142, 116, 255),
+    "bone_lt": (226, 220, 198, 255),
+    "eye_deep": (104, 52, 136, 255),
     "eye": (154, 88, 184, 255),
     "eye_lt": (200, 140, 220, 255),
+    "rim": (172, 196, 170, 255),
+    "shadow": (34, 36, 58, 255),
 }
 
 
 def draw_spider(f):
     t = new_img(64, 64)
     d = ImageDraw.Draw(t)
+    px = t.load()
     P = SPIDER_PAL
     dx, bob, tilt = f["dx"], f["bob"], f["tilt"]
     fangs, arc = f["fangs"], f["arc"]
     cx = 26 + dx
     cy = 40 + bob
     ground = 57
-    # ground shadow
-    d.ellipse([cx - 21, ground - 2, cx + 19, ground + 4], fill=OUTLINE)
+    # soft ground shadow (dithered edge)
+    d.ellipse([cx - 21, ground - 2, cx + 19, ground + 4], fill=P["shadow"])
+    dither(px, cx - 21, ground - 2, cx + 19, ground + 4, OUTLINE, 6, only=P["shadow"])
     # lunge speed streaks (behind everything)
     for s in range(arc):
         sy = cy - 6 + s * 6
@@ -586,32 +716,57 @@ def draw_spider(f):
         hx, hy = hips[k]
         fx, fy = base_feet[k] + fdx - 4, ground + min(0, fdy + 2)
         leg(d, (hx - 3, hy + 2), (fx, fy), 7, OUTLINE, 2)
-    # abdomen: 3-tone with bone chevrons + spinneret
+    # abdomen: 5-ramp shaded mass with bone chevrons + spinneret
     ell3(d, [cx - 20, cy - 12, cx - 1, cy + 9], P["moss_dk"], P["moss"], P["moss_lt"])
+    dither(px, cx - 20, cy + 1, cx - 1, cy + 9, P["moss_deep"], 6, only=P["moss_dk"])
+    dither(px, cx - 20, cy - 2, cx - 1, cy + 6, P["moss_dk"], 5, only=P["moss"])
+    dither(px, cx - 18, cy - 11, cx - 5, cy - 3, P["pale"], 6, only=P["moss_lt"])
+    dither(px, cx - 16, cy - 10, cx - 8, cy - 5, P["pale_lt"], 5, only=P["pale"])
     d.polygon([(cx - 21, cy - 3), (cx - 17, cy - 6), (cx - 17, cy)], fill=P["moss_dk"])
+    # bristle flicks along the abdomen crown
+    for i, bxx in enumerate(range(cx - 17, cx - 4, 3)):
+        byy = cy - 13 - (i % 2)
+        if 0 <= bxx < 64 and 0 <= byy:
+            px[bxx, byy] = P["moss_lt"] if i % 2 else P["moss"]
     for i, mx in enumerate((cx - 16, cx - 11)):
         my = cy - 3 + i
         d.line([(mx, my), (mx + 2, my - 3)], fill=P["bone"])
         d.line([(mx + 2, my - 3), (mx + 4, my)], fill=P["bone"])
-    # cephalothorax (tilts up on tell/bite)
+        px[mx + 2, my - 3] = P["bone_lt"]  # chevron peak catches light
+        d.line([(mx + 1, my + 1), (mx + 3, my - 1)], fill=P["bone_dk"])  # underside
+    # cephalothorax (tilts up on tell/bite), same 5-ramp treatment
     ell3(d, [cx - 3, cy - 8 - tilt, cx + 12, cy + 7 - tilt], P["moss_dk"], P["moss"], P["moss_lt"])
-    # near legs (outlined mid-tone, in front) with dark claw tips
+    dither(px, cx - 3, cy - tilt, cx + 12, cy + 7 - tilt, P["moss_deep"], 5, only=P["moss_dk"])
+    dither(px, cx - 2, cy - 7 - tilt, cx + 6, cy - 2 - tilt, P["pale"], 4, only=P["moss_lt"])
+    # under-chin core shadow toward the fangs
+    dither(px, cx + 4, cy + 2 - tilt, cx + 12, cy + 7 - tilt, P["moss_deep"], 7, only=P["moss_dk"])
+    dither(px, cx + 5, cy + 1 - tilt, cx + 11, cy + 5 - tilt, P["moss_dk"], 6, only=P["moss"])
+    # near legs (outlined mid-tone, in front) with lit knees + claw tips
     for k in range(4):
         fdx, fdy = f["feet"][k]
         hx, hy = hips[k]
         fx, fy = base_feet[k] + fdx, ground + fdy
         leg(d, (hx, hy), (fx, fy), 10, OUTLINE, 3)
         leg(d, (hx, hy - 1), (fx, fy - 1), 10, P["moss"], 1)
+        kx = (hx + fx) // 2
+        ky = min(hy, fy) - 10
+        if 0 <= kx < 64 and 0 <= ky < 64:
+            px[kx, ky] = P["moss_lt"]  # knee highlight
         t.putpixel((max(0, min(63, fx)), max(0, min(63, fy))), OUTLINE)
-    # eye cluster (cold violet) + pedipalps
+        if 0 <= fx - 1 < 64 and 0 <= fy - 1 < 64:
+            px[fx - 1, fy - 1] = P["bone_dk"]  # claw glint
+    # eye cluster (cold violet, 3-tone with a faint under-glow) + pedipalps
     ey = cy - 4 - tilt
     d.rectangle([cx + 8, ey, cx + 9, ey + 1], fill=P["eye"])
     t.putpixel((cx + 8, ey), P["eye_lt"])
     d.rectangle([cx + 5, ey - 1, cx + 6, ey], fill=P["eye"])
+    t.putpixel((cx + 6, ey), P["eye_deep"])
+    t.putpixel((cx + 5, ey - 1), P["eye_lt"])
     t.putpixel((cx + 11, ey + 1), P["eye"])
+    t.putpixel((cx + 10, ey + 2), P["eye_deep"])
     d.line([(cx + 10, cy + 3 - tilt), (cx + 13, cy + 5 - tilt)], fill=P["bone_dk"])
     d.line([(cx + 8, cy + 4 - tilt), (cx + 10, cy + 7 - tilt)], fill=P["bone_dk"])
-    # fangs: open (1) then snapped (2)
+    # fangs: open (1) then snapped (2), light-to-dark tip ramp
     if fangs:
         spread = 3 if fangs == 1 else 1
         for fx0, fy0 in ((cx + 11, cy + 2 - tilt), (cx + 13, cy - 1 - tilt)):
@@ -620,6 +775,9 @@ def draw_spider(f):
                 fill=P["bone"],
             )
             t.putpixel((fx0, fy0), P["bone_dk"])
+            t.putpixel((fx0 + 1, fy0 + 2), P["bone_lt"])
+    # cold dusk rim light along the lit silhouette
+    rim_light(t, {P["moss_lt"]: P["rim"], P["moss"]: P["rim"], P["moss_dk"]: P["moss_lt"], P["pale"]: P["rim"]})
     return t
 
 
@@ -645,11 +803,16 @@ def gen_spider():
 
 WISP_PAL = {
     "white": (246, 252, 255, 255),
+    "spark": (255, 255, 214, 255),
     "pale": (196, 232, 240, 255),
+    "teal_lt": (142, 218, 224, 255),
     "teal": (88, 196, 204, 255),
+    "teal_mid": (64, 168, 178, 255),
     "teal_dk": (48, 140, 150, 255),
     "deep": (30, 96, 106, 255),
+    "deep2": (20, 64, 76, 255),
     "trail": (24, 66, 76, 255),
+    "rim": (224, 246, 250, 255),
 }
 
 
@@ -663,37 +826,57 @@ def draw_wisp(f):
     stretch = f.get("stretch", 0)
     cx = 28 + dx
     cy = 26 + dy
-    # trailing wisp chain (shrinks while dashing)
+    # trailing wisp chain (shrinks while dashing), each orb its own ramp
     for k in range(trail_n):
         tx = cx - 12 - k * 8 - dx // 2
         ty = cy + 9 + k * 6
         r = 4 - k
         col = P["deep"] if k == 0 else P["trail"]
         d.ellipse([tx - r, ty - r, tx + r, ty + r], fill=col, outline=OUTLINE)
+        dither(px, tx - r, ty, tx + r, ty + r, P["deep2"], 6, only=col)
         if r >= 3:
             px[tx - 1, ty - 1] = P["teal_dk"]
-    # dash streaks
+            px[tx - 2, ty - 2] = P["teal_mid"] if k == 0 else P["deep"]
+    # dash streaks, hot core fading cold
     for s in range(streak):
         sy = cy - 5 + s * 5
         d.line([(cx - 26 - s * 3, sy), (cx - 14, sy)], fill=P["pale"])
+        d.line([(cx - 18 - s * 3, sy), (cx - 14, sy)], fill=P["teal_lt"])
         d.line([(cx - 22 - s * 3, sy + 1), (cx - 14, sy + 1)], fill=P["teal_dk"])
-    # orb: outline ring, pale rim, teal body, deep under-shadow, white flame core
+    # orb: outline ring, pale rim, layered teal body, deep under-shadow
     rx = 11 + (1 if pulse > 1 else 0) + stretch
     ry = 11 + (1 if pulse > 1 else 0) - stretch // 2
     d.ellipse([cx - rx - 1, cy - ry - 1, cx + rx + 1, cy + ry + 1], fill=OUTLINE)
     d.ellipse([cx - rx, cy - ry, cx + rx, cy + ry], fill=P["pale"])
-    d.ellipse([cx - rx + 3, cy - ry + 3, cx + rx - 2, cy + ry - 2], fill=P["teal"])
+    d.ellipse([cx - rx + 2, cy - ry + 2, cx + rx - 1, cy + ry - 1], fill=P["teal_lt"])
+    d.ellipse([cx - rx + 4, cy - ry + 4, cx + rx - 2, cy + ry - 2], fill=P["teal"])
+    dither(px, cx - rx + 2, cy - ry + 2, cx + rx - 2, cy, P["teal_lt"], 5, only=P["teal"])
+    d.ellipse([cx - 4, cy + ry - 7, cx + rx - 3, cy + ry - 2], fill=P["teal_mid"])
     d.ellipse([cx - 3, cy + ry - 6, cx + rx - 4, cy + ry - 2], fill=P["teal_dk"])
-    # flame-teardrop core
+    dither(px, cx - 2, cy + ry - 5, cx + rx - 5, cy + ry - 2, P["deep"], 6, only=P["teal_dk"])
+    # upper-left rim shine on the orb glass
+    d.arc([cx - rx + 1, cy - ry + 1, cx + rx - 1, cy + ry - 1], 195, 250, fill=P["rim"])
+    # flame-teardrop core with a spark heart
     cr = 3 + pulse
     d.ellipse([cx - cr, cy - 1, cx + cr, cy + cr + 2], fill=P["white"])
     d.polygon([(cx - 2, cy + 1), (cx + (1 if dy else -1), cy - 5 - pulse), (cx + 2, cy + 1)], fill=P["white"])
     px[cx - 2, cy + 1] = P["pale"]
+    px[cx, cy + 1 + pulse // 2] = P["spark"]
+    px[cx - 1, cy + 2] = P["spark"]
     # flame lick escaping the rim
     lx = cx + (2 if dy else -2)
     d.polygon([(lx - 2, cy - ry), (lx, cy - ry - 5 - pulse), (lx + 2, cy - ry)], fill=P["teal_dk"])
+    px[lx, cy - ry - 1] = P["teal_mid"]
     # ambient glow halo (dither ring, pulses on idle)
     glow_ring(px, 64, 64, cx, cy, rx + 2, rx + 5 + pulse, P["teal_dk"], 3 + pulse)
+    glow_ring(px, 64, 64, cx, cy, rx + 5 + pulse, rx + 8 + pulse, P["deep2"], 2 + pulse)
+    # idle life: tiny sparks rising off the flame crown
+    if not halo and not streak:
+        for k in range(3):
+            sx = cx - 4 + k * 4 + pulse
+            sy = cy - ry - 6 - (k * 5 + pulse * 3) % 7
+            if 0 <= sx < 64 and 0 <= sy < 64 and px[sx, sy][3] == 0:
+                px[sx, sy] = P["pale"] if k % 2 else P["teal_lt"]
     # cast rings + sparkles
     if halo:
         hr = rx + 3 + halo * 3
@@ -705,7 +888,7 @@ def draw_wisp(f):
             sx = cx + (hr - 1) * (1 if k % 2 else -1)
             sy = cy + (hr - 1) * (1 if k < 2 else -1)
             sx, sy = max(2, min(61, sx)), max(2, min(61, sy))
-            px[sx, sy] = P["white"]
+            px[sx, sy] = P["spark"]
             px[sx - 1, sy] = P["pale"]
             px[sx + 1, sy] = P["pale"]
             px[sx, sy - 1] = P["pale"]
@@ -738,39 +921,59 @@ REV_PAL = {
     "bone": (210, 200, 172, 255),
     "bone_dk": (166, 156, 130, 255),
     "bone_lt": (232, 224, 200, 255),
+    "bone_hi": (246, 242, 224, 255),
+    "cloth_deep": (36, 26, 54, 255),
     "cloth_dk": (50, 38, 72, 255),
     "cloth": (74, 58, 100, 255),
     "cloth_lt": (102, 84, 132, 255),
+    "cloth_hi": (128, 110, 158, 255),
+    "rot": (86, 92, 66, 255),
     "eye": (92, 204, 196, 255),
     "eye_dk": (48, 124, 118, 255),
+    "rim": (152, 192, 186, 255),
+    "shadow": (34, 36, 58, 255),
 }
 
 
 def rev_skull(t, d, x, y, P):
     d.ellipse([x - 5, y, x + 5, y + 9], fill=P["bone"], outline=OUTLINE)
     d.ellipse([x - 4, y + 1, x + 2, y + 5], fill=P["bone_lt"])
+    d.ellipse([x - 3, y + 1, x - 1, y + 3], fill=P["bone_hi"])  # crown shine
+    px = t.load()
+    dither(px, x - 4, y + 6, x + 5, y + 9, P["bone_dk"], 6, only=P["bone"])
     d.line([(x - 4, y + 3), (x + 4, y + 3)], fill=P["bone_dk"])  # brow
     # sockets with cold teal glow
     d.rectangle([x - 3, y + 4, x - 2, y + 5], fill=OUTLINE)
     d.rectangle([x + 2, y + 4, x + 3, y + 5], fill=OUTLINE)
     t.putpixel((x - 3, y + 4), P["eye"])
     t.putpixel((x + 2, y + 4), P["eye"])
+    t.putpixel((x - 3, y + 5), P["eye_dk"])
+    t.putpixel((x + 2, y + 5), P["eye_dk"])
     t.putpixel((x, y + 7), OUTLINE)  # nasal
+    # cheek crack
+    d.line([(x + 3, y + 6), (x + 4, y + 8)], fill=P["bone_dk"])
     # jaw + teeth
     d.rectangle([x - 3, y + 9, x + 3, y + 12], fill=P["bone_dk"], outline=OUTLINE)
     for tx in (x - 2, x, x + 2):
         t.putpixel((tx, y + 10), P["bone"])
+        t.putpixel((tx, y + 11), P["bone_lt"])
 
 
 def rev_ribcage(t, d, x, y, P):
     d.ellipse([x - 7, y, x + 7, y + 12], fill=OUTLINE)
     d.line([(x - 7, y), (x + 7, y)], fill=P["bone"])  # clavicle
+    t.putpixel((x - 6, y), P["bone_hi"])
+    t.putpixel((x - 5, y), P["bone_hi"])
     for k in range(3):
         d.arc([x - 6, y + 1 + k * 3, x + 6, y + 7 + k * 3], 200, 340, fill=P["bone"])
+        d.arc([x - 6, y + 2 + k * 3, x + 6, y + 8 + k * 3], 210, 300, fill=P["bone_dk"])
     d.line([(x, y + 1), (x, y + 12)], fill=P["bone_dk"])  # spine
+    t.putpixel((x, y + 2), P["bone_lt"])
+    t.putpixel((x, y + 6), P["bone_lt"])
 
 
 def rev_robe(t, d, x, y, P, sway=0):
+    px = t.load()
     hem = y + 26
     d.polygon(
         [
@@ -782,21 +985,48 @@ def rev_robe(t, d, x, y, P, sway=0):
         fill=P["cloth"],
         outline=OUTLINE,
     )
+    # 5-ramp cloth: deep folds, dithered hem shadow, lit crest, moss rot
     d.line([(x - 4, y + 2), (x - 6 + sway, hem - 4)], fill=P["cloth_dk"])
+    d.line([(x - 3, y + 2), (x - 5 + sway, hem - 4)], fill=P["cloth_deep"])
     d.line([(x + 2, y + 2), (x + 4 + sway, hem - 6)], fill=P["cloth_dk"])
+    d.line([(x + 6, y + 4), (x + 8 + sway, hem - 5)], fill=P["cloth_deep"])
     d.line([(x - 8, y + 2), (x - 9 + sway, hem - 5)], fill=P["cloth_lt"])
+    d.line([(x - 7, y + 1), (x - 8, y + 8)], fill=P["cloth_hi"])
+    dither(px, x - 10 + sway, hem - 8, x + 10 + sway, hem + 1, P["cloth_deep"], 6, only=P["cloth"])
+    dither(px, x - 9, y + 1, x + 9, y + 10, P["cloth_lt"], 3, only=P["cloth"])
+    # grave-moss stains creeping up the hem
+    for k, (mx, my) in enumerate(((x - 6 + sway, hem - 2), (x + 2 + sway, hem - 1), (x + 8 + sway, hem - 3))):
+        t.putpixel((mx, my), P["rot"])
+        t.putpixel((mx + 1, my - (k % 2)), P["rot"])
+
+
+def _rev_rim(t):
+    P = REV_PAL
+    return rim_light(
+        t,
+        {
+            P["cloth"]: P["rim"],
+            P["cloth_lt"]: P["rim"],
+            P["cloth_hi"]: P["rim"],
+            P["cloth_dk"]: P["cloth_lt"],
+            P["bone"]: P["bone_hi"],
+            P["bone_lt"]: P["bone_hi"],
+        },
+    )
 
 
 def draw_revenant(f):
     t = new_img(64, 64)
     d = ImageDraw.Draw(t)
+    px = t.load()
     P = REV_PAL
     scatter, lean, arm, arc = f["scatter"], f["lean"], f["arm"], f["arc"]
     cx = 30 + lean
     ground = 58
     s = scatter
-    # shadow (smaller while the pieces float)
-    d.ellipse([cx - 14 + s * 3, ground - 2, cx + 14 - s * 3, ground + 3], fill=OUTLINE)
+    # soft shadow (smaller while the pieces float)
+    d.ellipse([cx - 14 + s * 3, ground - 2, cx + 14 - s * 3, ground + 3], fill=P["shadow"])
+    dither(px, cx - 14 + s * 3, ground - 2, cx + 14 - s * 3, ground + 3, OUTLINE, 6, only=P["shadow"])
     if s:
         # -- reassembling: pieces apart with visible bone gaps --
         rev_robe(t, d, cx - 2 - s * 4, 30 + s * 3, P)
@@ -811,7 +1041,7 @@ def draw_revenant(f):
             mx = cx + ((k * 11 + s * 7) % 30) - 15
             my = 8 + ((k * 17 + s * 5) % 34)
             t.putpixel((mx, my), P["eye"] if k % 2 else P["eye_dk"])
-        return t
+        return _rev_rim(t)
     # -- assembled --
     rev_robe(t, d, cx, 28, P, sway=lean // 2)
     # shins under the hem
@@ -819,6 +1049,12 @@ def draw_revenant(f):
     d.line([(cx + 4, 54), (cx + 5, ground)], fill=P["bone_dk"], width=2)
     rev_ribcage(t, d, cx, 15, P)
     rev_skull(t, d, cx - lean // 2, 2, P)
+    if arm == 0 and not arc:  # idle: grave-light motes drifting around the skull
+        for k in range(4):
+            mx = cx - 16 + (k * 11 + (lean & 3) * 5) % 32
+            my = 4 + (k * 13 + (lean & 3) * 3) % 22
+            if 0 <= mx < 64 and 0 <= my < 64 and px[mx, my][3] == 0:
+                px[mx, my] = P["eye"] if k % 2 else P["eye_dk"]
     # far arm hanging
     d.line([(cx - 7, 17), (cx - 11, 25)], fill=P["bone_dk"], width=2)
     d.line([(cx - 11, 25), (cx - 9, 34)], fill=P["bone_dk"], width=2)
@@ -844,7 +1080,7 @@ def draw_revenant(f):
     if arc:  # spectral swing trail
         d.arc([cx + 6, 2, cx + 34, 30], 280, 20, fill=P["eye"])
         d.arc([cx + 4, 4, cx + 30, 34], 290, 10, fill=P["eye_dk"])
-    return t
+    return _rev_rim(t)
 
 
 def gen_revenant():
@@ -930,6 +1166,8 @@ def draw_cloaked(f):
             wob = ((y // 6 + sway) % 3) - 1
             if 0 <= xx + wob - 1 < 96:
                 px[xx + wob - 1, y] = P["cloak_lt"]
+    # hood crown sheen above the cavity
+    dither(px, ax - 7, 12, ax + 8, 20, P["cloak_lt"], 3, ox=1, only=P["cloak"])
     # hood cavity with the single ember eye glint
     d.ellipse([ax - 6, 20, ax + 10, 34], fill=P["cloak_dk"])
     d.ellipse([ax - 3, 24, ax + 7, 33], fill=OUTLINE)
@@ -958,6 +1196,12 @@ def draw_cloaked(f):
     if arc:  # short swipe streaks trailing the claw path
         d.line([(64, 42), (80, 42)], fill=P["bone"])
         d.line([(68, 46), (86, 46)], fill=P["bone"])
+    # deep hem shade + faint ember spill from the hood (the swallowed heart)
+    dither(px, 22, 82, 76, 88, OUTLINE, 5, ox=1, only=P["cloak_dk"])
+    px[ax - 2, 35] = P["fl_or"]
+    px[ax + 5, 34] = P["fl_or"]
+    # rim light along the shroud's lit silhouette
+    rim_light(t, {P["cloak"]: P["cloak_lt"], P["cloak_lt"]: P["bone"], P["cloak_dk"]: P["cloak"]})
     return t
 
 
@@ -1051,9 +1295,10 @@ def draw_uncloaked(f):
         hx, hy = bx + 34, by - 26
     else:
         hx, hy = bx + 26, by - 28
-    # neck joining head to shoulders
+    # neck joining head to shoulders, lit along its top edge
     d.line([(bx + 14, by - 10), (hx - 2, hy + 8)], fill=P["tawny"], width=7)
     d.line([(bx + 17, by - 6), (hx + 1, hy + 10)], fill=P["tawny_dk"], width=2)
+    d.line([(bx + 11, by - 12), (hx - 4, hy + 6)], fill=P["tawny_lt"], width=2)
     # ember mane (it owns fire): spiked ring of flame around the head
     for mk in range(7):
         ang_x = (-14, -16, -13, -6, 2, -12, -4)[mk]
@@ -1112,6 +1357,22 @@ def draw_uncloaked(f):
         for s in range(3):
             sy = by - 18 + s * 8
             d.line([(bx - 46, sy), (bx - 32, sy)], fill=P["bone"])
+    # scale glints on the haunch + deep belly shade (richer ramp work)
+    dither(px, bx - 24, by + 8, bx + 20, by + 15, OUTLINE, 3, ox=2, only=P["tawny_dk"])
+    for k, (gx, gy) in enumerate(((bx - 18, by + 2), (bx - 13, by + 5), (bx - 8, by + 1))):
+        px[gx, gy] = P["scale"] if k % 2 else P["scale_lt"]
+    # rim light: cool bone catch on the lit silhouette, wings included
+    rim_light(
+        t,
+        {
+            P["tawny"]: P["tawny_lt"],
+            P["tawny_lt"]: P["bone"],
+            P["tawny_dk"]: P["tawny"],
+            P["wing"]: P["cloak_lt"],
+            P["wing_dk"]: P["wing"],
+            P["scale"]: P["scale_lt"],
+        },
+    )
     return t
 
 
@@ -1144,6 +1405,70 @@ def gen_chimera():
 
 
 # ---------------------------------------------------------------------------
+# 4. UI panel — 48x48 SNES window, 9-slice safe with 16px corners. All ring
+#    colors depend only on (distance-to-edge, nearest edge), so every middle
+#    strip is uniform along its stretch axis and slices cleanly.
+
+UI_PAL = {
+    "edge": (16, 14, 36, 255),
+    "bevel_hi": (208, 208, 240, 255),
+    "bevel_lo": (150, 150, 198, 255),
+    "grad_top": (124, 106, 208, 255),
+    "grad_hi2": (100, 86, 184, 255),
+    "grad_mid": (84, 70, 160, 255),
+    "grad_lo2": (66, 52, 136, 255),
+    "grad_bot": (50, 38, 112, 255),
+    "inner": (30, 26, 62, 255),
+    "fill": (16, 14, 40, 235),  # dark translucent navy interior (~0.92 alpha)
+}
+
+
+def gen_ui_panel():
+    t = new_img(48, 48)
+    px = t.load()
+    P = UI_PAL
+    for y in range(48):
+        for x in range(48):
+            dt, db, dl, dr = y, 47 - y, x, 47 - x
+            dist = min(dt, db, dl, dr)
+            if dist <= 1:
+                c = P["edge"]  # 2px outer dark edge
+            elif dist <= 3:
+                c = P["bevel_hi"] if dist == 2 else P["bevel_lo"]  # 2px light bevel
+            elif dist <= 6:
+                # 3-step vertical gradient frame: bright crown, mid flanks,
+                # deep sill — bands meet in 45-degree miters at the corners.
+                if dt == dist:
+                    c = (P["grad_top"], P["grad_hi2"], P["grad_mid"])[dist - 4]
+                elif db == dist:
+                    c = (P["grad_bot"], P["grad_lo2"], P["grad_mid"])[dist - 4]
+                else:
+                    c = P["grad_mid"]
+            elif dist == 7:
+                c = P["inner"]  # inner shadow line
+            else:
+                c = P["fill"]
+            px[x, y] = c
+    return t
+
+
+# ---------------------------------------------------------------------------
+# 5. Tile shimmer overlay — 96x16, 6 frames 16x16. Frames 0/2/4 are pixel-
+#    identical to tileset tiles 3/9/15 (phase 0); frames 1/3/5 are the
+#    alternate shimmer phases. The Overworld scene swaps overlay frames on a
+#    timer, so the pairs must share their base pixels (checked below).
+
+
+def gen_tile_anim():
+    img = new_img(96, 16)
+    for i, tile in enumerate(
+        (t_water(0), t_water(1), t_marsh_water(0), t_marsh_water(1), t_ember_glow(0), t_ember_glow(1))
+    ):
+        img.paste(tile, (i * 16, 0))
+    return img
+
+
+# ---------------------------------------------------------------------------
 # Self-checks (PLAN §6 source-asset-lint mirror; exit non-zero on failure)
 
 
@@ -1158,13 +1483,27 @@ def check(cond, msg):
         sys.exit(1)
 
 
+# Sheets allowed to exceed the 96px frame-height rule: battle backdrops are
+# full 256x144 scenes, not sprite sheets. (CI's source-asset-lint only
+# enforces the divisible-by-16 grid, which 256x144 satisfies — verified
+# against .github/workflows/ci.yml.)
+H96_EXEMPT = ("backdrops",)
+
+REQUIRED_MANIFEST_IDS = (
+    "enemy.spider", "enemy.wisp", "enemy.revenant", "enemy.chimera",
+    "hero.overworld", "backdrop.forest", "backdrop.marsh", "backdrop.ruin",
+    "backdrop.lair", "ui.panel", "tile.anim",
+)
+
+
 def self_check(generated):
     for path in generated:
         img = Image.open(path)
         w, h = img.size
         rel = os.path.relpath(path, ROOT)
         check(w % 16 == 0 and h % 16 == 0, f"{path}: {w}x{h} not divisible by 16")
-        check(h <= 96, f"{path}: frame height exceeds 96")
+        exempt = any(os.sep + e + os.sep in path for e in H96_EXEMPT)
+        check(exempt or h <= 96, f"{path}: frame height exceeds 96")
         if path.endswith(os.path.join("tilesets", "overworld.png")):
             check((w, h) == (256, 16), f"{path}: tileset must be 256x16, got {w}x{h}")
             # per-tile <= 16 colors, master pool <= 32 on the sheet
@@ -1180,8 +1519,37 @@ def self_check(generated):
             check(n <= 16, f"{path}: {n} unique colors (> 16)")
             print(f"  ok {rel}  {w}x{h}  {n} colors")
 
+    # hero sheet: 8 frames, every frame distinct (real 2-frame walk pairs)
+    hero = Image.open(os.path.join(SPRITES, "hero-overworld.png"))
+    check(hero.size == (128, 16), f"hero-overworld.png: {hero.size} != (128, 16)")
+    frames = [hero.crop((i * 16, 0, i * 16 + 16, 16)).tobytes() for i in range(8)]
+    for a in range(8):
+        for b in range(a + 1, 8):
+            check(frames[a] != frames[b], f"hero-overworld frames {a} and {b} are identical")
+    print("  ok hero-overworld.png  8 distinct frames")
+
+    # tile-anim frames 0/2/4 must be pixel-identical to tileset tiles 3/9/15
+    tiles = Image.open(os.path.join(TILESETS, "overworld.png"))
+    anim = Image.open(os.path.join(SPRITES, "tile-anim.png"))
+    for frame, tile_idx in ((0, 3), (2, 9), (4, 15)):
+        a = anim.crop((frame * 16, 0, frame * 16 + 16, 16)).tobytes()
+        b = tiles.crop((tile_idx * 16, 0, tile_idx * 16 + 16, 16)).tobytes()
+        check(a == b, f"tile-anim frame {frame} != tileset tile {tile_idx}")
+        alt = anim.crop((frame * 16 + 16, 0, frame * 16 + 32, 16)).tobytes()
+        check(alt != a, f"tile-anim frames {frame}/{frame + 1} are identical (no shimmer)")
+    print("  ok tile-anim.png  frames 0/2/4 match tileset tiles 3/9/15, pairs animate")
+
+    # bitmap font: .fnt parses, chars 32-126 all present and in-bounds
+    font_png = Image.open(os.path.join(FONTS, "font.png"))
+    with open(os.path.join(FONTS, "font.fnt"), encoding="utf-8") as f:
+        errs = pixelfont.validate_fnt(f.read(), font_png.size)
+    check(not errs, "; ".join(errs) if errs else "")
+    print(f"  ok font.fnt  chars 32-126 present, metrics in-bounds ({font_png.size[0]}x{font_png.size[1]})")
+
     with open(ART_MANIFEST, encoding="utf-8") as f:
         manifest = json.load(f)
+    for rid in REQUIRED_MANIFEST_IDS:
+        check(rid in manifest, f"art-manifest missing required id '{rid}'")
     for key, entry in manifest.items():
         p = os.path.join(PUB, entry["file"])
         check(os.path.isfile(p), f"art-manifest '{key}' -> {entry['file']} missing under public/")
@@ -1190,8 +1558,9 @@ def self_check(generated):
         fw, fh = entry["frameWidth"], entry["frameHeight"]
         check(w % fw == 0 and h % fh == 0, f"{key}: sheet {w}x{h} not divisible by {fw}x{fh}")
         nframes = (w // fw) * (h // fh)
-        max_idx = max(i for a in entry["anims"].values() for i in a["frames"])
-        check(max_idx < nframes, f"{key}: anim frame {max_idx} outside sheet ({nframes} frames)")
+        idxs = [i for a in entry["anims"].values() for i in a["frames"]]
+        if idxs:
+            check(max(idxs) < nframes, f"{key}: anim frame {max(idxs)} outside sheet ({nframes} frames)")
         print(f"  ok manifest {key} -> {entry['file']} ({nframes} frames)")
     print("All self-checks passed.")
 
@@ -1200,8 +1569,8 @@ def self_check(generated):
 
 
 def main():
-    os.makedirs(TILESETS, exist_ok=True)
-    os.makedirs(SPRITES, exist_ok=True)
+    for dirpath in (TILESETS, SPRITES, BACKDROPS_DIR, FONTS):
+        os.makedirs(dirpath, exist_ok=True)
     outputs = {
         os.path.join(TILESETS, "overworld.png"): gen_tileset,
         os.path.join(SPRITES, "hero-overworld.png"): gen_hero,
@@ -1209,10 +1578,19 @@ def main():
         os.path.join(SPRITES, "wisp.png"): gen_wisp,
         os.path.join(SPRITES, "revenant.png"): gen_revenant,
         os.path.join(SPRITES, "chimera.png"): gen_chimera,
+        os.path.join(SPRITES, "tile-anim.png"): gen_tile_anim,
+        os.path.join(SPRITES, "ui-panel.png"): gen_ui_panel,
+        os.path.join(FONTS, "font.png"): pixelfont.build_font_png,
     }
+    for name, fn in gen_backdrops.BACKDROPS.items():
+        outputs[os.path.join(BACKDROPS_DIR, f"{name}.png")] = fn
     for path, gen in outputs.items():
         gen().save(path)
         print(f"wrote {os.path.relpath(path, ROOT)}")
+    fnt_path = os.path.join(FONTS, "font.fnt")
+    with open(fnt_path, "w", encoding="utf-8", newline="\n") as f:
+        f.write(pixelfont.build_fnt_xml())
+    print(f"wrote {os.path.relpath(fnt_path, ROOT)}")
     self_check(list(outputs.keys()))
 
 

@@ -937,7 +937,7 @@
       {
        "name": "dialogueId",
        "type": "string",
-       "value": "sign-gate"
+       "value": "dlg-sign-gate"
       }
      ],
      "rotation": 0,
@@ -955,7 +955,7 @@
       {
        "name": "dialogueId",
        "type": "string",
-       "value": "npc-gatekeeper"
+       "value": "dlg-npc-keeper-1"
       }
      ],
      "rotation": 0,

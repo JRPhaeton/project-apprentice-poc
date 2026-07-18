@@ -37,6 +37,7 @@ type LoadState = 'loading' | 'ready' | 'failed';
 const states = new Map<string, LoadState>();
 let currentMusic: string | null = null;
 let wantedMusic: string | null = null;
+let wantedLoop = true;
 let warned = false;
 
 function warnOnce(): void {
@@ -126,10 +127,24 @@ function startMusic(scene: Phaser.Scene, key: string): void {
         if (wantedMusic !== key || currentMusic !== key) {
             return; // superseded while waiting for load/unlock
         }
+        const loop = wantedLoop;
         try {
-            // §6: full-file gapless loop — no loopStart/loopEnd, ever.
-            if (sound.play(key, { loop: true, volume: volumeOf(scene, key) })) {
+            // §6: full-file gapless loop — no loopStart/loopEnd, ever. M6
+            // adds one-shot tracks (music.sting) via { loop: false }.
+            if (sound.play(key, { loop, volume: volumeOf(scene, key) })) {
                 markMusic(key);
+                if (!loop) {
+                    // One-shots clear the pocMusic hook when they end.
+                    sound.get(key)?.once(Phaser.Sound.Events.COMPLETE, () => {
+                        if (currentMusic === key) {
+                            currentMusic = null;
+                            markMusic(null);
+                        }
+                        if (wantedMusic === key) {
+                            wantedMusic = null;
+                        }
+                    });
+                }
             }
         } catch {
             warnOnce();
@@ -145,9 +160,11 @@ function startMusic(scene: Phaser.Scene, key: string): void {
 /**
  * Route music to `key`: play immediately when loaded, else lazy-load then
  * play. Re-requesting the playing track is a no-op (gapless across rooms).
+ * `opts.loop` defaults to true; pass false for one-shot stings.
  */
-export function playMusic(scene: Phaser.Scene, key: string): void {
+export function playMusic(scene: Phaser.Scene, key: string, opts?: { loop?: boolean }): void {
     wantedMusic = key;
+    wantedLoop = opts?.loop ?? true;
     if (scene.cache.audio.exists(key)) {
         startMusic(scene, key);
         return;

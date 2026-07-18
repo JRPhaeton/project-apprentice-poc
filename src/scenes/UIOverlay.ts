@@ -4,17 +4,20 @@ import { markHp } from '../systems/hooks';
 import { dur } from '../systems/pacing';
 import { isPaused } from '../systems/pause';
 import { savingDisabled } from '../systems/storage';
+import { addPanel, addUiText, moreMarkerChar, type UiPanel, type UiText } from '../systems/ui';
 
 /**
  * Parallel UI scene (§4 of docs/PLAN.md): HUD (HP/MP + 'saving disabled'
- * notice, §11), the shared bottom dialogue/battle-log box (2-line, advance on
- * Enter/Z, §8 hold-to-fast-forward), and toasts. Runs above Overworld/Battle.
+ * notice, §11) on a chrome backing strip, the shared bottom dialogue/battle-
+ * log box (2-line, advance on Enter/Z, §8 hold-to-fast-forward) in a chrome
+ * panel, and toasts. Runs above Overworld/Battle. All text renders through
+ * the M6 UI kit (bitmap font with monospace fallback).
  */
 export class UIOverlay extends Phaser.Scene {
-    private hudText!: Phaser.GameObjects.Text;
-    private boxBg!: Phaser.GameObjects.Rectangle;
-    private boxText!: Phaser.GameObjects.Text;
-    private moreMarker!: Phaser.GameObjects.Text;
+    private hudText!: UiText;
+    private boxBg!: UiPanel;
+    private boxText!: UiText;
+    private moreMarker!: UiText;
     private keys!: { enter: Phaser.Input.Keyboard.Key; z: Phaser.Input.Keyboard.Key };
 
     private logLines: string[] = [];
@@ -34,33 +37,19 @@ export class UIOverlay extends Phaser.Scene {
     }
 
     create(): void {
-        this.hudText = this.add
-            .text(4, 3, '', { fontFamily: 'monospace', fontSize: '8px', color: '#e0e0e0' })
-            .setDepth(100);
+        addPanel(this, 0, 0, 256, 16).setDepth(99);
+        this.hudText = addUiText(this, 4, 4, '', {}).setDepth(100);
         if (savingDisabled()) {
-            this.add
-                .text(252, 3, 'SAVING OFF', { fontFamily: 'monospace', fontSize: '8px', color: '#ff8080' })
+            addUiText(this, 252, 4, 'SAVING OFF', { color: 0xff8080 })
                 .setOrigin(1, 0)
                 .setDepth(100);
         }
-        this.boxBg = this.add
-            .rectangle(2, 178, 252, 44, 0x101020, 0.94)
-            .setOrigin(0, 0)
-            .setStrokeStyle(1, 0x8080a0)
-            .setDepth(100)
-            .setVisible(false);
-        this.boxText = this.add
-            .text(8, 184, '', {
-                fontFamily: 'monospace',
-                fontSize: '8px',
-                color: '#e0e0e0',
-                wordWrap: { width: 240 },
-                lineSpacing: 2
-            })
+        this.boxBg = addPanel(this, 2, 178, 252, 44);
+        this.boxBg.setDepth(100).setVisible(false);
+        this.boxText = addUiText(this, 8, 184, '', { wrapWidth: 240, lineSpacing: 2 })
             .setDepth(101)
             .setVisible(false);
-        this.moreMarker = this.add
-            .text(246, 212, '▼', { fontFamily: 'monospace', fontSize: '8px', color: '#ffff80' })
+        this.moreMarker = addUiText(this, 246, 212, moreMarkerChar(this), { color: 0xffff80 })
             .setOrigin(1, 0)
             .setDepth(101)
             .setVisible(false);
@@ -123,8 +112,7 @@ export class UIOverlay extends Phaser.Scene {
     }
 
     toast(text: string): void {
-        const t = this.add
-            .text(128, 96, text, { fontFamily: 'monospace', fontSize: '8px', color: '#ffff80' })
+        const t = addUiText(this, 128, 96, text, { color: 0xffff80, align: 'center' })
             .setOrigin(0.5)
             .setDepth(102);
         this.tweens.add({
