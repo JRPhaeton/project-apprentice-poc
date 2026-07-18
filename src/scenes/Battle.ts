@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 
 import { mulberry32 } from '../core/battle/rng';
 import { createBattle } from '../core/battle/factory';
+import { applyVictoryXp } from '../core/battle/progression';
 import { resolveAction, type ContentDefs } from '../core/battle/resolver';
 import type { Action, BattleState, Rng } from '../core/contracts/battle';
 import type { BattleRequest } from '../core/contracts/registry';
@@ -94,6 +95,11 @@ export class Battle extends Phaser.Scene {
             queueSheet(this.load, this.defs.art, artId);
         }
         queueSheet(this.load, this.defs.art, this.backdropKey);
+        if (this.defs.encounters[this.request.encounterId].boss) {
+            // M10: the Victory relight beat's Emberheart sprite — boss
+            // battles are the only road to Victory, so it rides this batch.
+            queueSheet(this.load, this.defs.art, 'fx.emberheart');
+        }
         ensureAudio(this, BATTLE_AUDIO_KEYS);
         if (this.load.list.size > 0) {
             const loading = addUiText(this, 128, 112, 'LOADING...', { color: 0x808080 })
@@ -361,7 +367,7 @@ export class Battle extends Phaser.Scene {
 
     private async finish(): Promise<void> {
         const outcome = this.state.outcome as 'victory' | 'defeat' | 'fled';
-        const hero = { ...this.reg.get('hero') };
+        let hero = { ...this.reg.get('hero') };
         const heroCombatant = this.state.combatants[this.state.heroId];
         hero.stats = { ...hero.stats, hp: heroCombatant.stats.hp, mp: heroCombatant.stats.mp };
         hero.inventory = this.state.inventory.filter((s) => s.qty > 0).map((s) => ({ ...s }));
@@ -371,7 +377,10 @@ export class Battle extends Phaser.Scene {
                 (sum, defId) => sum + this.defs.enemies[defId].xp,
                 0
             );
-            hero.xp += xp;
+            // M10: victory XP runs through the §5 progression rules (level-up
+            // stat gains + full-heal ding) instead of bare XP accumulation.
+            const victory = applyVictoryXp(hero, xp);
+            hero = victory.hero;
             const stats = this.reg.get('stats');
             this.reg.set('stats', {
                 battlesWon: stats.battlesWon + 1,
@@ -386,7 +395,19 @@ export class Battle extends Phaser.Scene {
             stopMusic(this); // §6: music stops on win; fanfare stands alone
             playSfx(this, 'sfx.victory');
             playVictoryFlash(this); // M6: victory screen flash
-            this.ui().toast(`+${xp} XP`);
+            if (victory.leveledUp) {
+                // M10 level-up jingle (silent-safe like every sfx).
+                playSfx(this, 'sfx.levelup');
+                this.ui().toast(`+${xp} XP\nLEVEL UP! LV ${hero.level}`);
+                this.ui().setHeroHud(
+                    hero.stats.hp,
+                    hero.stats.maxHp,
+                    hero.stats.mp,
+                    hero.stats.maxMp
+                );
+            } else {
+                this.ui().toast(`+${xp} XP`);
+            }
             autosave(this.reg); // autosave on battle victory (§4)
             await new Promise((r) => this.time.delayedCall(Math.max(1, dur(1000)), r));
         } else {

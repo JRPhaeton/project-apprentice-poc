@@ -29,7 +29,8 @@ export const BATTLE_AUDIO_KEYS = [
     'sfx.hit',
     'sfx.magic',
     'sfx.victory',
-    'sfx.menu'
+    'sfx.menu',
+    'sfx.levelup' // M10: victory-toast level-up jingle
 ];
 
 type LoadState = 'loading' | 'ready' | 'failed';

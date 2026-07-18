@@ -8,6 +8,8 @@ import Phaser from 'phaser';
  *   - 'spawn' point                          → arrival point for fresh entry
  *   - 'exit' rect (targetRoom/targetX/targetY props, tile coords) → room link
  *   - 'bossdoor' rect (encounterId + dialogueId props)            → boss gate
+ *   - 'chest' rect (itemId + qty props, M10)  → treasure chest, non-colliding
+ *   - 'npc' rect (dialogueId + spriteId, M10) → NPC, sign-style interaction
  *   - any rect with encounterId prop         → patrol encounter zone
  *   - any rect with dialogueId prop          → readable sign
  * Tile property collide=true → setCollisionByProperty. Falls back to a
@@ -89,6 +91,22 @@ export interface BossDoorZone {
     rect: Phaser.Geom.Rectangle;
 }
 
+/** M10 treasure chest (lane convention: name 'chest', itemId + qty props).
+ *  Non-colliding; opened-state flag keys derive from MAP ORDER per room. */
+export interface ChestZone {
+    itemId: string;
+    qty: number;
+    rect: Phaser.Geom.Rectangle;
+}
+
+/** M10 NPC (lane convention: name 'npc', dialogueId + spriteId props).
+ *  Non-colliding; interaction is exactly the sign flow. */
+export interface NpcZone {
+    dialogueId: string;
+    spriteId: string;
+    rect: Phaser.Geom.Rectangle;
+}
+
 export interface OverworldMapData {
     widthPx: number;
     heightPx: number;
@@ -101,6 +119,8 @@ export interface OverworldMapData {
     signs: SignZone[];
     exits: ExitZone[];
     bossDoors: BossDoorZone[];
+    chests: ChestZone[];
+    npcs: NpcZone[];
 }
 
 type TiledObject = Phaser.Types.Tilemaps.TiledObject;
@@ -165,6 +185,8 @@ function buildFromTilemap(scene: Phaser.Scene, key: string): OverworldMapData {
     const signs: SignZone[] = [];
     const exits: ExitZone[] = [];
     const bossDoors: BossDoorZone[] = [];
+    const chests: ChestZone[] = [];
+    const npcs: NpcZone[] = [];
 
     const objects = map.getObjectLayer('objects');
     for (const obj of objects?.objects ?? []) {
@@ -188,6 +210,25 @@ function buildFromTilemap(scene: Phaser.Scene, key: string): OverworldMapData {
             if (typeof encounterId === 'string' && typeof dialogueId === 'string') {
                 bossDoors.push({ encounterId, dialogueId, rect: objRect(obj) });
             }
+        } else if (obj.name === 'chest') {
+            // M10: name-first like bossdoor. Array order IS map order — the
+            // per-room opened flags (`chest.<room>#<i>`) depend on it.
+            const itemId = getProp(obj, 'itemId');
+            const qty = getProp(obj, 'qty');
+            if (typeof itemId === 'string') {
+                chests.push({
+                    itemId,
+                    qty: typeof qty === 'number' && qty > 0 ? Math.floor(qty) : 1,
+                    rect: objRect(obj)
+                });
+            }
+        } else if (obj.name === 'npc') {
+            // M10: name-first — an npc carries dialogueId, which would
+            // otherwise misclassify it as a plain sign below.
+            const spriteId = getProp(obj, 'spriteId');
+            if (typeof dialogueId === 'string' && typeof spriteId === 'string') {
+                npcs.push({ dialogueId, spriteId, rect: objRect(obj) });
+            }
         } else if (typeof encounterId === 'string') {
             encounters.push({ encounterId, rect: objRect(obj), armed: false });
         } else if (typeof dialogueId === 'string') {
@@ -204,7 +245,9 @@ function buildFromTilemap(scene: Phaser.Scene, key: string): OverworldMapData {
         encounters,
         signs,
         exits,
-        bossDoors
+        bossDoors,
+        chests,
+        npcs
     };
 }
 
@@ -228,6 +271,8 @@ function buildFallback(scene: Phaser.Scene): OverworldMapData {
         // M6 unified dlg-* IDs (GDD amendment 2 debt cleared).
         signs: [{ dialogueId: 'dlg-sign-gate', rect: new Phaser.Geom.Rectangle(96, 48, 16, 16) }],
         exits: [],
-        bossDoors: []
+        bossDoors: [],
+        chests: [],
+        npcs: []
     };
 }

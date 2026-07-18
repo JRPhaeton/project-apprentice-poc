@@ -1010,6 +1010,52 @@
      "width": 16,
      "x": 496,
      "y": 192
+    },
+    {
+     "height": 16,
+     "id": 6,
+     "name": "chest",
+     "properties": [
+      {
+       "name": "itemId",
+       "type": "string",
+       "value": "herb"
+      },
+      {
+       "name": "qty",
+       "type": "int",
+       "value": 2
+      }
+     ],
+     "rotation": 0,
+     "type": "",
+     "visible": true,
+     "width": 16,
+     "x": 288,
+     "y": 320
+    },
+    {
+     "height": 24,
+     "id": 7,
+     "name": "npc",
+     "properties": [
+      {
+       "name": "dialogueId",
+       "type": "string",
+       "value": "dlg-npc-keeper-1"
+      },
+      {
+       "name": "spriteId",
+       "type": "string",
+       "value": "npc.keeper"
+      }
+     ],
+     "rotation": 0,
+     "type": "",
+     "visible": true,
+     "width": 16,
+     "x": 288,
+     "y": 360
     }
    ],
    "opacity": 1,
@@ -1929,7 +1975,7 @@
   }
  ],
  "nextlayerid": 4,
- "nextobjectid": 6,
+ "nextobjectid": 8,
  "orientation": "orthogonal",
  "renderorder": "right-down",
  "tiledversion": "1.10.2",

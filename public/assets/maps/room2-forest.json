@@ -1092,6 +1092,52 @@
      "width": 16,
      "x": 208,
      "y": 272
+    },
+    {
+     "height": 16,
+     "id": 10,
+     "name": "chest",
+     "properties": [
+      {
+       "name": "itemId",
+       "type": "string",
+       "value": "herb"
+      },
+      {
+       "name": "qty",
+       "type": "int",
+       "value": 1
+      }
+     ],
+     "rotation": 0,
+     "type": "",
+     "visible": true,
+     "width": 16,
+     "x": 352,
+     "y": 288
+    },
+    {
+     "height": 16,
+     "id": 11,
+     "name": "chest",
+     "properties": [
+      {
+       "name": "itemId",
+       "type": "string",
+       "value": "manaMoss"
+      },
+      {
+       "name": "qty",
+       "type": "int",
+       "value": 1
+      }
+     ],
+     "rotation": 0,
+     "type": "",
+     "visible": true,
+     "width": 16,
+     "x": 384,
+     "y": 32
     }
    ],
    "opacity": 1,
@@ -2011,7 +2057,7 @@
   }
  ],
  "nextlayerid": 4,
- "nextobjectid": 10,
+ "nextobjectid": 12,
  "orientation": "orthogonal",
  "renderorder": "right-down",
  "tiledversion": "1.10.2",

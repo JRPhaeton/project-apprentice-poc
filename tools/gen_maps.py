@@ -14,16 +14,24 @@ re-emits every map against tileset v2 (tools/tileset_v2.py — 256x128):
     tiles over tree masses with scalloped edges, 1-tile canopy hang fringes
     onto adjacent walkable cells (never over object-covered cells), wall/
     ruin-wall cap-tops over interior wall cells, cap-lip strips over faces.
-  * 'objects' layer: passed through VERBATIM (deep-equal asserted).
+  * 'objects' layer: pre-M10 objects passed through VERBATIM and IN ORDER,
+    then the M10 ADDITIVE extras (tools/room_extras.py literal table:
+    treasure chests + the gate Keeper npc) appended at the tail. Extras
+    already present on disk (matched by name) are stripped first, so
+    re-running remains a byte-stable fixed point.
   * embedded tileset decl: columns 16, tilecount 128, imageheight 128, image
     path unchanged; per-tile properties collide:bool / anim:string from
     tileset_v2.build_props() — the engine scans properties, never indices.
 
-HARD SELF-CHECKS (generation fails on violation):
+HARD SELF-CHECKS (generation fails on violation; M10-amended policy):
   (a) the new collide-cell set — cells whose GROUND gid has collide:true —
       EXACTLY equals the v1 collide set per room, and the overhead layer
       contains no collide-property tile at all;
-  (b) the objects layer is deep-equal to the original;
+  (b) all pre-M10 objects present verbatim IN ORDER as the layer prefix;
+      the room_extras appended at the tail with fresh ids (all greater
+      than every pre-M10 id, sequential); every cell covered by an extra
+      is walkable (non-collide ground gid) and overlaps no pre-M10
+      object rect;
   (c) every gid is in [0..128], 0 allowed only on the overhead layer;
   (d) both tile layers are exactly width*height (896) entries.
 
@@ -43,6 +51,7 @@ import sys
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import room_extras  # noqa: E402  (M10 additive extras table)
 import tileset_v2 as tv  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -375,7 +384,7 @@ def emit_map(room, mapobj, ground, overhead):
     return new
 
 
-def verify_room(room, old, new, old_collide):
+def verify_room(room, old, new, old_collide, base_objects, extras):
     w, h = old["width"], old["height"]
     layers = {la["name"]: la for la in new["layers"]}
     ground = layers["ground"]["data"]
@@ -403,14 +412,42 @@ def verify_room(room, old, new, old_collide):
         f"{room}: overhead layer contains collide-property tiles",
     )
 
-    # (b) objects deep-equal
-    old_objects = next(la for la in old["layers"] if la.get("type") == "objectgroup")
-    new_objects = next(la for la in new["layers"] if la.get("type") == "objectgroup")
-    check(old_objects == new_objects, f"{room}: objects layer not deep-equal")
+    # (b) M10 policy: pre-M10 objects verbatim in order, extras at the tail
+    new_objects = next(la for la in new["layers"] if la.get("type") == "objectgroup")["objects"]
+    n_base = len(base_objects)
+    check(
+        new_objects[:n_base] == base_objects,
+        f"{room}: pre-M10 objects not preserved verbatim in order",
+    )
+    check(new_objects[n_base:] == extras, f"{room}: extras not appended at the tail")
+    max_base_id = max(o["id"] for o in base_objects)
+    extra_ids = [o["id"] for o in extras]
+    check(
+        extra_ids == list(range(max_base_id + 1, max_base_id + 1 + len(extras))),
+        f"{room}: extra ids {extra_ids} not fresh/sequential after {max_base_id}",
+    )
+    check(
+        new["nextobjectid"] == max_base_id + 1 + len(extras),
+        f"{room}: nextobjectid {new['nextobjectid']} stale",
+    )
+    # extras' cells: walkable ground, no overlap with any pre-M10 object rect
+    base_cells = object_cells({"objects": base_objects}, w, h)
+    for obj in extras:
+        for cx, cy in sorted(object_cells({"objects": [obj]}, w, h)):
+            gid = ground[cy * w + cx]
+            check(
+                gid not in collide_gids,
+                f"{room}: extra '{obj['name']}' id {obj['id']} on collide cell ({cx},{cy})",
+            )
+            check(
+                (cx, cy) not in base_cells,
+                f"{room}: extra '{obj['name']}' id {obj['id']} overlaps a pre-M10 object at ({cx},{cy})",
+            )
 
-    # non-layer top-level fields preserved (tilesets/nextlayerid change by design)
+    # non-layer top-level fields preserved (tilesets/nextlayerid change by
+    # design; nextobjectid advances past the appended extras, checked above)
     for key in old:
-        if key not in ("layers", "tilesets", "nextlayerid"):
+        if key not in ("layers", "tilesets", "nextlayerid", "nextobjectid"):
             check(old[key] == new[key], f"{room}: top-level '{key}' changed")
 
 
@@ -441,14 +478,25 @@ def main():
         path = os.path.join(MAPS, f"{room}.json")
         with open(path, encoding="utf-8") as f:
             mapobj = json.load(f)
+        # M10: strip any previously appended extras (fixed point), then
+        # append this run's extras BEFORE composing, so decor scatter and
+        # canopy hangs keep clear of the chest/npc cells too.
+        objects_layer = next(la for la in mapobj["layers"] if la.get("type") == "objectgroup")
+        base_objects = [
+            o for o in objects_layer["objects"] if o["name"] not in room_extras.EXTRA_NAMES
+        ]
+        extras = room_extras.build_extras(room, max(o["id"] for o in base_objects) + 1)
+        objects_layer["objects"] = base_objects + extras
         ground, overhead, old_collide, stats = compose_room(room, mapobj)
         new = emit_map(room, mapobj, ground, overhead)
-        verify_room(room, mapobj, new, old_collide)
+        new["nextobjectid"] = max(o["id"] for o in base_objects) + 1 + len(extras)
+        verify_room(room, mapobj, new, old_collide, base_objects, extras)
         with open(path, "w", encoding="utf-8", newline="\n") as f:
             json.dump(new, f, indent=1, sort_keys=True)
             f.write("\n")
         print(
             f"wrote {os.path.relpath(path, ROOT)}  collide={len(old_collide)} "
+            f"objects={len(base_objects)}+{len(extras)} "
             f"transitions={stats['transition']} shadows={stats['shadow']} "
             f"decor={stats['decor']} hangs={stats['hang']} caps={stats['cap']} "
             f"anim-cells={stats['anim']}"

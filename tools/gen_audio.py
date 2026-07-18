@@ -9,7 +9,7 @@ signature ambience). Under it: a filtered-noise drum kit (pitched-sine
 kick + click, bandpassed-noise snare, metallic hats, brushes) and a
 dedicated bass voice (pulse+triangle hybrid with an amp envelope).
 
-Composes the POC's 3 music loops + 1 intro sting + 5 SFX entirely in code
+Composes the POC's 3 music loops + 1 intro sting + 7 SFX entirely in code
 (numpy from note tables; all noise from fixed seeds, so re-running
 reproduces the WAV masters bit-for-bit), then encodes every asset to BOTH
 codecs at the exact paths in src/data/audio-manifest.json:
@@ -27,6 +27,9 @@ codecs at the exact paths in src/data/audio-manifest.json:
       sting: low drone swell, sparse inharmonic bells (tritone hang),
       ember-crackle noise texture, unresolved ending.
   sfx.attack/hit/magic/victory/menu           <= 1.5 s one-shots.
+  sfx.chest/levelup (M10)                     <= 1.5 s one-shots: treasure
+      lid-creak + rising 3-note sparkle w/ echo tail; bright ascending
+      4-note E-major level-up ding ending high with shimmer.
 
 Loop convention (AUDIO_BIBLE §3): every music loop is a self-contained
 full-file seamless loop — exact bar-length sample count, echo/filter tails
@@ -806,6 +809,79 @@ def sfx_menu():
     return out * envelope(n, a=0.002, d=0.012, s=0.75, r=0.02, gate=0.92)
 
 
+# soft rounded "ding" patch (M10): detuned triangles + sine fundamental —
+# reads apart from the pulse/saw brass of LEAD_LAYERS (sfx.victory)
+DING_LAYERS = [("tri", 0.0, -3.0, 0.45), ("tri", 0.0, 3.0, 0.45),
+               ("sine", 0.0, 0.0, 0.32)]
+
+
+def sfx_chest():
+    """Treasure-open (M10): latch tick + accelerating lid-creak ratchet +
+    wooden thunk, then a rising 3-note sparkle arpeggio with an echo tail."""
+    n = int(1.25 * SR)
+    out = np.zeros(n)
+    # latch tick: tiny filtered-noise click right at the front
+    cn = int(0.004 * SR)
+    out[:cn] += 0.9 * lp1(noise(cn, 501), 5000) * np.exp(
+        -np.arange(cn) / (0.0012 * SR))
+    # lid creak: stick-slip ratchet — bandpassed noise gated by an
+    # accelerating decaying-tooth pulse train (lid speeding up as it opens)
+    kn = int(0.16 * SR)
+    tk = np.arange(kn) / SR
+    rate = 26.0 + 90.0 * tk / 0.16  # ticks/s, accelerating
+    tooth = np.exp(-8.0 * (np.cumsum(rate) / SR % 1.0))
+    body = hp1(lp1(noise(kn, 502), 2600), 700)
+    creak = body * tooth * np.sin(np.pi * np.clip(tk / 0.16, 0, 1)) ** 0.8
+    k0 = int(0.006 * SR)
+    out[k0:k0 + kn] += 0.85 * creak
+    # wooden thunk under the creak (falling sine sweep)
+    f = 160.0 * np.exp(-18.0 * tk) + 70.0
+    out[k0:k0 + kn] += 0.4 * np.sin(2 * np.pi * np.cumsum(f) / SR) * np.exp(
+        -20.0 * tk)
+    # sparkle: 3 rising C-major arpeggio notes, last one held with vibrato
+    arp0 = int(0.20 * SR)
+    for i, (m, dur) in enumerate(((84, 0.085), (88, 0.085), (91, 0.34))):
+        sn = int(dur * SR)
+        s = voice(midi_hz(m), sn, ARP_LAYERS, vib=0.006 if i == 2 else 0.0)
+        s *= envelope(sn, a=0.002, d=0.02, s=0.75, r=0.05, gate=0.94)
+        start = arp0 + int(i * 0.085 * SR)
+        out[start:start + sn] += (0.75 + 0.1 * i) * s
+    # faint octave shimmer riding the held note
+    tn = int(0.30 * SR)
+    sh = voice(midi_hz(96), tn, ARP_LAYERS, vib=0.012)
+    sh0 = arp0 + int(0.17 * SR)
+    out[sh0:sh0 + tn] += 0.18 * sh * np.exp(-6.0 * np.arange(tn) / SR)
+    out = echo_oneshot(out, 0.14, 0.45, 3400, taps=5)
+    fo = int(0.22 * SR)
+    out[-fo:] *= np.linspace(1.0, 0.0, fo)
+    return out
+
+
+def sfx_levelup():
+    """Level-up ding (M10): bright ascending 4-note E-major motif (E-G#-B-E)
+    ending high with a vibrato shimmer an octave up — no drums, no closing
+    chord, triangle/sine timbre, so it reads apart from sfx.victory."""
+    n = int(1.40 * SR)
+    out = np.zeros(n)
+    motif = [(0.0, 0.10, 76, 0.80), (0.10, 0.10, 80, 0.85),
+             (0.20, 0.10, 83, 0.90), (0.30, 0.50, 88, 1.0)]
+    for start, d, m, g in motif:
+        sn = int(d * SR)
+        s = voice(midi_hz(m), sn, DING_LAYERS, vib=0.005 if d > 0.2 else 0.0)
+        s *= envelope(sn, a=0.002, d=0.03, s=0.8, r=0.06, gate=0.95)
+        i0 = int(start * SR)
+        out[i0:i0 + sn] += g * s
+    # shimmer: E7 sparkle decaying over the held top note's tail
+    sh0 = int(0.34 * SR)
+    tn = int(0.55 * SR)
+    sh = voice(midi_hz(100), tn, ARP_LAYERS, vib=0.014)
+    out[sh0:sh0 + tn] += 0.35 * sh * np.exp(-5.0 * np.arange(tn) / SR)
+    out = echo_oneshot(out, 0.12, 0.42, 3800, taps=4)
+    fo = int(0.25 * SR)
+    out[-fo:] *= np.linspace(1.0, 0.0, fo)
+    return out
+
+
 # ---------------------------------------------------------------------------
 # WAV + encode + loudness plumbing
 
@@ -959,6 +1035,26 @@ def decode_verify(name, ogg_path, n_master, is_loop):
               f"(master {n_master}) — one-shot intact")
 
 
+def sfx_decode_verify(name, ogg_path, n_master):
+    """Decode an encoded SFX OGG back to PCM and confirm the one-shot
+    survived the codec: length within one Vorbis block of the master (short
+    one-shots get their tail trimmed to a block boundary) and a peak still
+    at the -3 dBFS normalization target (within lossy-codec drift)."""
+    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+        tmp = f.name
+    run(["ffmpeg", "-hide_banner", "-y", "-i", ogg_path, tmp])
+    dec = read_wav(tmp)
+    os.unlink(tmp)
+    check(abs(dec.shape[1] - n_master) <= 576,
+          f"{name}: decoded OGG length {dec.shape[1]} != master {n_master}")
+    pk = float(np.max(np.abs(dec)))
+    pk_db = 20.0 * math.log10(max(pk, 1e-12))
+    check(-4.5 <= pk_db <= -1.5,
+          f"{name}: decoded peak {pk_db:.2f} dBFS drifted from the -3 target")
+    print(f"  {name}: {n_master / SR:.2f} s one-shot, decoded peak "
+          f"{pk_db:.2f} dBFS (target -3)")
+
+
 def main():
     os.makedirs(AUDIO_DIR, exist_ok=True)
     music = {
@@ -973,6 +1069,8 @@ def main():
         "sfx-magic": sfx_magic,
         "sfx-victory": sfx_victory,
         "sfx-menu": sfx_menu,
+        "sfx-chest": sfx_chest,
+        "sfx-levelup": sfx_levelup,
     }
     with tempfile.TemporaryDirectory() as td:
         for name, (builder, is_loop) in music.items():
@@ -997,18 +1095,25 @@ def main():
             decode_verify(name, ogg, x.shape[1], is_loop)
         for name, builder in sfx.items():
             x = builder()
+            check(len(x) / SR <= 1.5,
+                  f"{name}: {len(x) / SR:.2f}s master exceeds the 1.5s SFX design cap")
             peak = np.max(np.abs(x))
             x = x * (10.0 ** (-3.0 / 20.0) / peak)  # peak-normalize to -3 dBFS
+            check(abs(np.max(np.abs(x)) - 10.0 ** (-3.0 / 20.0)) < 1e-9,
+                  f"{name}: master peak missed the -3 dBFS target")
             x = x[None, :]  # mono
             wav = os.path.join(td, name + ".wav")
             write_wav(wav, x)
-            encode(wav, os.path.join(AUDIO_DIR, name + ".ogg"),
-                   os.path.join(AUDIO_DIR, name + ".m4a"))
+            ogg = os.path.join(AUDIO_DIR, name + ".ogg")
+            encode(wav, ogg, os.path.join(AUDIO_DIR, name + ".m4a"))
+            sfx_decode_verify(name, ogg, x.shape[1])
 
     # --- verification against the manifest + budgets ---
     with open(AUDIO_MANIFEST, encoding="utf-8") as f:
         manifest = json.load(f)
     check("music.sting" in manifest, "manifest missing the music.sting entry")
+    for key in ("sfx.chest", "sfx.levelup"):  # M10 additions
+        check(key in manifest, f"manifest missing the {key} entry")
     print("\n  asset               codec  dur(s)  kbps   bytes")
     total = 0
     for key, entry in manifest.items():

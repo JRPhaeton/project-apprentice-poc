@@ -18,6 +18,14 @@ Outputs (all self-authored, CC0 — see assets/CREDITS.md):
   public/assets/sprites/overworld-minis.png 128x16   8 frames 16x16 (M8)
       0,1 spider bob / 2,3 wisp flicker / 4,5 revenant sway / 6 blob
       shadow / 7 spare
+  public/assets/sprites/chest.png            32x16   2 frames 16x16 (M10)
+      0 closed banded wooden chest (ember-glint lock) / 1 open (lid up,
+      warm glow inside)
+  public/assets/sprites/npc-keeper.png       32x48   2 frames 16x24 (M10)
+      the gate Keeper: older robed figure, lantern in hand, 2-frame idle
+      sway; top row only, pad row transparent for the CI grid
+  public/assets/sprites/emberheart.png       64x32   2 frames 32x32 (M10)
+      the Emberheart, same key art as the PWA icons; 2-frame flicker
   public/assets/sprites/spider.png          448x64   7 frames 64x64
   public/assets/sprites/wisp.png            448x64   7 frames 64x64
   public/assets/sprites/revenant.png        448x64   7 frames 64x64
@@ -437,6 +445,186 @@ def gen_minis():
     for i, f in enumerate(frames):
         img.paste(f, (i * 16, 0))
     return img  # frame 7 intentionally transparent (spare)
+
+
+# ---------------------------------------------------------------------------
+# 2c. Treasure chest (M10) — 32x16, 2 frames 16x16: 0 closed banded wooden
+#     chest with an ember-glint lock (the warm accent marks it interactable,
+#     ART_BIBLE §2), 1 open with the lid up and a warm glow inside. Chunky
+#     3-tone planks + cool iron bands so it reads at 1x on every ground.
+
+CHEST_PAL = {
+    "wood_dk": (70, 50, 34, 255),   # shared with the hero's boots
+    "wood": (104, 76, 46, 255),
+    "wood_lt": (140, 106, 66, 255),
+    "wood_hi": (172, 140, 92, 255),
+    "iron_dk": (58, 62, 82, 255),
+    "iron": (96, 102, 126, 255),
+    "iron_lt": (150, 150, 198, 255),  # ui bevel_lo family
+    "ember": (232, 144, 48, 255),
+    "ember_lt": (248, 200, 88, 255),
+    "glow_dp": (120, 42, 26, 255),  # dark rust (icon 'deep')
+}
+
+
+def chest_frame(is_open):
+    t = new_img(16, 16)
+    d = ImageDraw.Draw(t)
+    px = t.load()
+    P = CHEST_PAL
+
+    def bands(y0, y1):
+        """Thin iron corner straps — 1px so the wood stays dominant."""
+        for bx in (4, 11):
+            d.line([(bx, y0), (bx, y1)], fill=P["iron_dk"])
+            px[bx, y0] = P["iron"]  # top rivet catches light
+
+    if not is_open:
+        # domed lid y2-6 over body y7-14
+        d.rectangle([2, 3, 13, 6], fill=P["wood_lt"], outline=OUTLINE)
+        d.line([(3, 2), (12, 2)], fill=OUTLINE)  # dome crown
+        d.line([(4, 2), (11, 2)], fill=P["wood_hi"])  # crown catch-light
+        d.line([(3, 4), (12, 4)], fill=P["wood_hi"])
+        d.line([(3, 6), (12, 6)], fill=P["wood"])  # lid underside
+        d.rectangle([2, 7, 13, 14], fill=P["wood"], outline=OUTLINE)
+        d.line([(3, 7), (12, 7)], fill=P["wood_dk"])  # seam shadow
+        d.line([(3, 10), (12, 10)], fill=P["wood_dk"])  # plank joints
+        d.line([(3, 13), (12, 13)], fill=P["wood_dk"])
+        dither(px, 3, 11, 12, 12, P["wood_dk"], 4, only=P["wood"])
+        bands(4, 13)
+        d.rectangle([6, 6, 9, 9], fill=P["iron"], outline=OUTLINE)  # hasp
+        px[7, 7] = P["ember_lt"]  # the ember glint that says "open me"
+        px[8, 7] = P["ember"]
+        px[7, 8] = P["ember"]
+        px[8, 8] = P["glow_dp"]
+    else:
+        # lid thrown up y0-3 (dark inner face), warm light in the mouth
+        d.rectangle([2, 0, 13, 3], fill=P["wood_dk"], outline=OUTLINE)
+        d.line([(3, 2), (12, 2)], fill=P["wood"])  # inner planks
+        px[4, 1] = P["iron_dk"]  # strap ends on the inner face
+        px[11, 1] = P["iron_dk"]
+        # the open mouth: glow spilling out of the box
+        d.rectangle([2, 4, 13, 7], fill=P["glow_dp"])
+        d.rectangle([3, 4, 12, 7], fill=P["ember"])
+        d.rectangle([5, 4, 10, 7], fill=P["ember_lt"])
+        dither(px, 3, 4, 12, 5, P["ember_lt"], 6, only=P["ember"])
+        px[7, 4] = (255, 244, 214, 255)  # hottest sliver at the rim
+        px[8, 5] = (255, 244, 214, 255)
+        # body y8-14, planks + straps as on the closed frame
+        d.rectangle([2, 8, 13, 14], fill=P["wood"], outline=OUTLINE)
+        d.line([(3, 8), (12, 8)], fill=P["wood_lt"])  # rim lit by the glow
+        d.line([(3, 11), (12, 11)], fill=P["wood_dk"])
+        d.line([(3, 13), (12, 13)], fill=P["wood_dk"])
+        dither(px, 3, 12, 12, 12, P["wood_dk"], 4, only=P["wood"])
+        bands(9, 13)
+        d.rectangle([6, 9, 9, 11], fill=P["iron"], outline=OUTLINE)  # dropped hasp
+        px[7, 9] = P["ember_lt"]
+        # sparks rising past the lid
+        px[3, 1] = P["ember_lt"]
+        px[12, 0] = P["ember"]
+    return t
+
+
+def gen_chest():
+    img = new_img(32, 16)
+    img.paste(chest_frame(False), (0, 0))
+    img.paste(chest_frame(True), (16, 0))
+    return img
+
+
+# ---------------------------------------------------------------------------
+# 2d. Gate Keeper npc (M10) — 32x48 sheet, 2 idle frames 16x24 on the top
+#     row (bottom frame row transparent: CI's 16px grid needs 48, and the
+#     manifest slices 16x24). Hero proportions (~10px head, 3/4 stance) and
+#     the same palette discipline: desaturated warm-grey robe, bone beard,
+#     the lantern's warm dot is his ember accent (ART_BIBLE §2 — the
+#     Keeper's lantern is a sanctioned warm element). Frame 1 sways: head
+#     bow, hem shift, the lantern swings and its glint blinks.
+
+KEEPER_PAL = {
+    "robe_dk": (56, 52, 46, 255),
+    "robe": (78, 72, 62, 255),
+    "robe_lt": (104, 96, 80, 255),
+    "robe_hi": (132, 124, 104, 255),
+    "skin": (232, 200, 160, 255),
+    "skin_dk": (196, 158, 120, 255),
+    "bone": (210, 200, 172, 255),   # beard/hair (revenant bone family)
+    "bone_dk": (166, 156, 130, 255),
+    "boot": (70, 50, 34, 255),
+    "iron_dk": (58, 62, 82, 255),   # lantern cage
+    "ember": (232, 144, 48, 255),
+    "ember_lt": (248, 200, 88, 255),
+}
+
+
+def keeper_frame(sway):
+    t = new_img(16, 24)
+    d = ImageDraw.Draw(t)
+    px = t.load()
+    P = KEEPER_PAL
+    b = 1 if sway else 0   # weight shift: head/shoulder dip on the off-beat
+    hem = 1 if sway else 0
+
+    # ---- boots under the robe hem ----
+    d.rectangle([4, 21, 5, 23], fill=P["boot"])
+    d.rectangle([9, 21, 10, 23], fill=P["boot"])
+    d.line([(4, 23), (5, 23)], fill=OUTLINE)
+    d.line([(9, 23), (10, 23)], fill=OUTLINE)
+
+    # ---- stooped robe (y9-21): rounded shoulders, rope belt, worn folds ----
+    d.polygon(
+        [(4, 9 + b), (10, 9 + b), (12, 21), (2 - hem + 1, 21)],
+        fill=P["robe"],
+        outline=OUTLINE,
+    )
+    d.line([(4, 10 + b), (3, 20)], fill=P["robe_lt"])  # lit left flank
+    d.line([(5, 10 + b), (4, 20)], fill=P["robe_lt"])
+    d.line([(10, 11 + b), (11, 20)], fill=P["robe_dk"])  # shaded right
+    dither(px, 3, 17, 12, 20, P["robe_dk"], 3, ox=hem, only=P["robe"])
+    d.line([(4, 14 + b), (10, 14 + b)], fill=P["bone_dk"])  # rope belt
+    px[5, 14 + b] = P["bone"]
+    d.line([(7, 15 + b), (7 - hem, 20)], fill=P["robe_dk"])  # center fold
+
+    # ---- head (y2-9): bald crown, bone hair fringe, long beard ----
+    d.ellipse([4, 2 + b, 11, 9 + b], fill=P["skin"], outline=OUTLINE)
+    px[5, 3 + b] = P["skin"]  # bald crown highlight
+    px[6, 2 + b] = P["skin"]
+    d.line([(4, 6 + b), (4, 8 + b)], fill=P["bone"])  # temple fringes
+    d.line([(11, 6 + b), (11, 8 + b)], fill=P["bone_dk"])
+    d.line([(5, 5 + b), (6, 5 + b)], fill=P["bone_dk"])  # heavy brows
+    d.line([(9, 5 + b), (10, 5 + b)], fill=P["bone_dk"])
+    px[6, 6 + b] = OUTLINE  # deep-set eyes
+    px[9, 6 + b] = OUTLINE
+    px[5, 7 + b] = P["skin_dk"]  # cheek age lines
+    px[10, 7 + b] = P["skin_dk"]
+    # beard: bone wedge over the chin onto the chest
+    d.polygon([(5, 8 + b), (10, 8 + b), (9, 13 + b), (7, 14 + b), (6, 13 + b)], fill=P["bone"])
+    d.line([(7, 9 + b), (7, 13 + b)], fill=P["bone_dk"])  # beard part
+    px[9, 12 + b] = P["bone_dk"]
+
+    # ---- far arm folded into the sleeve ----
+    d.line([(4, 12 + b), (3, 15 + b)], fill=P["robe_dk"])
+
+    # ---- lantern arm + the lantern (his warm dot), swinging on the sway ----
+    lx = 12 + sway  # lantern cage left edge
+    d.line([(10, 12 + b), (12, 14 + b)], fill=P["robe_dk"], width=2)  # sleeve
+    px[12, 14 + b] = P["robe_lt"]  # cuff catch-light
+    d.line([(lx + 1, 15 + b), (lx + 1, 16 + b)], fill=P["iron_dk"])  # hanger
+    d.rectangle([lx, 16 + b, lx + 2, 19 + b], fill=P["iron_dk"], outline=OUTLINE)
+    px[lx + 1, 17 + b] = P["ember_lt"] if sway else P["ember"]  # the flame
+    px[lx + 1, 18 + b] = P["ember"] if sway else P["ember_lt"]
+    # faint warm spill onto the robe beside the lantern
+    px[lx - 1, 18 + b] = P["ember"]
+
+    rim_light(t, {P["robe"]: P["robe_lt"], P["robe_lt"]: P["robe_hi"], P["bone"]: (232, 224, 200, 255)})
+    return t
+
+
+def gen_npc_keeper():
+    img = new_img(32, 48)
+    img.paste(keeper_frame(0), (0, 0))
+    img.paste(keeper_frame(1), (16, 0))
+    return img  # bottom 24px frame row stays transparent (grid padding)
 
 
 # ---------------------------------------------------------------------------
@@ -1494,26 +1682,31 @@ def _heart_hit(x, y, s):
     return abs(X) <= 6.0 + math.sqrt(max(0.0, 49.0 - (Y + 0.5) ** 2))
 
 
-def _flame_depth(x, y, s):
+def _flame_depth(x, y, s, phase=0):
     """> 0 inside a flame lick; magnitude = design-px distance to its edge.
-    A wobbling main tongue rising from the notch plus two side licks."""
+    A wobbling main tongue rising from the notch plus two side licks.
+    `phase` rotates the wobble table and re-leans the side licks — the M10
+    emberheart sprite's second flicker frame; phase 0 is the icon art."""
     X = (x - 15.5) / s
     Y = (y - 15.5) / s
     best = 0.0
     if -13.5 <= Y <= -4.0:
         k = (Y + 13.5) / 9.5
-        wob = (0.15, 0.9, -0.6)[int(-Y) % 3]
+        wob = (0.15, 0.9, -0.6)[(int(-Y) + phase) % 3]
         best = max(best, 0.6 + 3.1 * k - abs(X - wob * (1 - k)))
+    lean = 0.35 * phase
     if -9.5 <= Y <= -5.0:
-        best = max(best, 0.4 + 1.4 * (Y + 9.5) / 4.5 - abs(X + 5.2))
+        best = max(best, 0.4 + 1.4 * (Y + 9.5) / 4.5 - abs(X + 5.2 - lean))
     if -10.5 <= Y <= -5.5:
-        best = max(best, 0.4 + 1.3 * (Y + 10.5) / 5.0 - abs(X - 4.9))
+        best = max(best, 0.4 + 1.3 * (Y + 10.5) / 5.0 - abs(X - 4.9 - lean))
     return best
 
 
-def emberheart_art(s=1.0):
+def emberheart_art(s=1.0, phase=0):
     """32x32 key art on transparency: flame licks behind, shaded heart in
-    front (5-color ember ramp), molten notch core, drifting sparks."""
+    front (5-color ember ramp), molten notch core, drifting sparks.
+    `phase` 0 = the PWA icon art; 1 = the M10 sprite's flicker frame
+    (flame wobble rotated, sparks drifted one design-px upward)."""
     t = new_img(32, 32)
     px = t.load()
     P = ICON_PAL
@@ -1522,7 +1715,7 @@ def emberheart_art(s=1.0):
         for x in range(32):
             if heart[y][x]:
                 continue
-            m = _flame_depth(x, y, s)
+            m = _flame_depth(x, y, s, phase)
             if m <= 0:
                 continue
             Y = (y - 15.5) / s
@@ -1571,11 +1764,16 @@ def emberheart_art(s=1.0):
                     c = P["deep"]
                     break
             px[x, y] = c
-    # drifting sparks (design offsets scale with the art)
-    for dx_, dy_, key in (
+    # drifting sparks (design offsets scale with the art; on the flicker
+    # phase they drift one design-px upward and the hottest one blinks)
+    sparks = (
         (-11.5, -6.0, "ember_lt"), (10.2, -7.6, "white"), (13.0, 1.5, "ember"),
         (-12.8, 3.5, "ember"), (7.6, -10.6, "ember_lt"),
-    ):
+    ) if phase == 0 else (
+        (-11.5, -7.0, "ember"), (10.2, -8.6, "ember_lt"), (13.0, 0.5, "ember"),
+        (-12.8, 2.5, "ember_lt"), (7.6, -11.6, "white"), (0.4, -14.6, "ember"),
+    )
+    for dx_, dy_, key in sparks:
         sx = int(round(15.5 + dx_ * s))
         sy = int(round(15.5 + dy_ * s))
         if 0 <= sx < 32 and 0 <= sy < 32 and px[sx, sy][3] == 0:
@@ -1628,6 +1826,20 @@ def gen_apple_icon():
 
 
 # ---------------------------------------------------------------------------
+# 6b. Emberheart sprite (M10) — 64x32, 2 frames 32x32 on transparency for
+#     the Victory relight beat: frame 0 is the PWA icon key art itself
+#     (pixel-identical, asserted below), frame 1 the flicker phase (flame
+#     wobble rotated, sparks drifted, hot spark blinking).
+
+
+def gen_emberheart():
+    img = new_img(64, 32)
+    img.paste(emberheart_art(), (0, 0))
+    img.paste(emberheart_art(phase=1), (32, 0))
+    return img
+
+
+# ---------------------------------------------------------------------------
 # Self-checks (PLAN §6 source-asset-lint mirror; exit non-zero on failure)
 
 
@@ -1653,6 +1865,7 @@ REQUIRED_MANIFEST_IDS = (
     "enemy.spider", "enemy.wisp", "enemy.revenant", "enemy.chimera",
     "enemy.minis", "hero.overworld", "backdrop.forest", "backdrop.marsh",
     "backdrop.ruin", "backdrop.lair", "ui.panel", "ui.touch", "tile.anim",
+    "chest", "npc.keeper", "fx.emberheart",
 )
 
 
@@ -1693,6 +1906,48 @@ def self_check(generated):
     pad = hero.crop((0, 24, 128, 48))
     check(pad.getchannel("A").getextrema()[1] == 0, "hero-overworld pad row not transparent")
     print("  ok hero-overworld.png  8 distinct 16x24 frames, pad row clear")
+
+    # M10 chest: 2 distinct non-empty 16x16 frames; the open frame carries
+    # the warm interior glow (ember_lt present), the closed frame the glint
+    chest = Image.open(os.path.join(SPRITES, "chest.png"))
+    check(chest.size == (32, 16), f"chest.png: {chest.size} != (32, 16)")
+    cf = [chest.crop((i * 16, 0, i * 16 + 16, 16)) for i in range(2)]
+    for i, f in enumerate(cf):
+        check(f.getchannel("A").getextrema()[1] > 0, f"chest frame {i} is empty")
+        check(
+            CHEST_PAL["ember_lt"] in unique_colors(f),
+            f"chest frame {i} lost its warm ember accent",
+        )
+    check(cf[0].tobytes() != cf[1].tobytes(), "chest frames identical (no open pose)")
+    print("  ok chest.png  closed/open 16x16 frames distinct, ember accent present")
+
+    # M10 keeper: 2 distinct non-empty 16x24 frames on the top row, pad row
+    # clear, and the lantern's warm dot present in both frames
+    keeper = Image.open(os.path.join(SPRITES, "npc-keeper.png"))
+    check(keeper.size == (32, 48), f"npc-keeper.png: {keeper.size} != (32, 48)")
+    kf = [keeper.crop((i * 16, 0, i * 16 + 16, 24)) for i in range(2)]
+    for i, f in enumerate(kf):
+        check(f.getchannel("A").getextrema()[1] > 0, f"npc-keeper frame {i} is empty")
+        check(
+            KEEPER_PAL["ember"] in unique_colors(f),
+            f"npc-keeper frame {i} lost the lantern's warm dot",
+        )
+    check(kf[0].tobytes() != kf[1].tobytes(), "npc-keeper frames identical (no sway)")
+    kpad = keeper.crop((0, 24, 32, 48))
+    check(kpad.getchannel("A").getextrema()[1] == 0, "npc-keeper pad row not transparent")
+    print("  ok npc-keeper.png  2 distinct 16x24 idle frames, lantern lit, pad row clear")
+
+    # M10 emberheart: frame 0 pixel-identical to the PWA icon key art,
+    # frame 1 a distinct flicker phase
+    emb = Image.open(os.path.join(SPRITES, "emberheart.png"))
+    check(emb.size == (64, 32), f"emberheart.png: {emb.size} != (64, 32)")
+    ef = [emb.crop((i * 32, 0, i * 32 + 32, 32)) for i in range(2)]
+    check(
+        ef[0].tobytes() == emberheart_art().tobytes(),
+        "emberheart frame 0 != the PWA icon key art",
+    )
+    check(ef[0].tobytes() != ef[1].tobytes(), "emberheart frames identical (no flicker)")
+    print("  ok emberheart.png  frame 0 matches the icon key art, flicker frame distinct")
 
     # minis: frames 0-6 non-empty, idle pairs distinct, frame 7 clear,
     # shadow blob (frame 6) soft — its darkest pixel stays translucent
@@ -1834,6 +2089,9 @@ def main():
         os.path.join(TILESETS, "overworld.png"): gen_tileset,
         os.path.join(SPRITES, "hero-overworld.png"): gen_hero,
         os.path.join(SPRITES, "overworld-minis.png"): gen_minis,
+        os.path.join(SPRITES, "chest.png"): gen_chest,
+        os.path.join(SPRITES, "npc-keeper.png"): gen_npc_keeper,
+        os.path.join(SPRITES, "emberheart.png"): gen_emberheart,
         os.path.join(SPRITES, "spider.png"): gen_spider,
         os.path.join(SPRITES, "wisp.png"): gen_wisp,
         os.path.join(SPRITES, "revenant.png"): gen_revenant,

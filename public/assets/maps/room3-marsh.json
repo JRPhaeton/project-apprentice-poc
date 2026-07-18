@@ -1038,6 +1038,52 @@
      "width": 16,
      "x": 496,
      "y": 208
+    },
+    {
+     "height": 16,
+     "id": 7,
+     "name": "chest",
+     "properties": [
+      {
+       "name": "itemId",
+       "type": "string",
+       "value": "emberDraught"
+      },
+      {
+       "name": "qty",
+       "type": "int",
+       "value": 1
+      }
+     ],
+     "rotation": 0,
+     "type": "",
+     "visible": true,
+     "width": 16,
+     "x": 448,
+     "y": 160
+    },
+    {
+     "height": 16,
+     "id": 8,
+     "name": "chest",
+     "properties": [
+      {
+       "name": "itemId",
+       "type": "string",
+       "value": "manaMoss"
+      },
+      {
+       "name": "qty",
+       "type": "int",
+       "value": 1
+      }
+     ],
+     "rotation": 0,
+     "type": "",
+     "visible": true,
+     "width": 16,
+     "x": 144,
+     "y": 160
     }
    ],
    "opacity": 1,
@@ -1957,7 +2003,7 @@
   }
  ],
  "nextlayerid": 4,
- "nextobjectid": 7,
+ "nextobjectid": 9,
  "orientation": "orthogonal",
  "renderorder": "right-down",
  "tiledversion": "1.10.2",

@@ -23,5 +23,7 @@
     "sfx.hit": { "ogg": "assets/audio/sfx-hit.ogg", "m4a": "assets/audio/sfx-hit.m4a", "volume": 1 },
     "sfx.magic": { "ogg": "assets/audio/sfx-magic.ogg", "m4a": "assets/audio/sfx-magic.m4a", "volume": 1 },
     "sfx.victory": { "ogg": "assets/audio/sfx-victory.ogg", "m4a": "assets/audio/sfx-victory.m4a", "volume": 0.9 },
-    "sfx.menu": { "ogg": "assets/audio/sfx-menu.ogg", "m4a": "assets/audio/sfx-menu.m4a", "volume": 0.7 }
+    "sfx.menu": { "ogg": "assets/audio/sfx-menu.ogg", "m4a": "assets/audio/sfx-menu.m4a", "volume": 0.7 },
+    "sfx.chest": { "ogg": "assets/audio/sfx-chest.ogg", "m4a": "assets/audio/sfx-chest.m4a", "volume": 0.9 },
+    "sfx.levelup": { "ogg": "assets/audio/sfx-levelup.ogg", "m4a": "assets/audio/sfx-levelup.m4a", "volume": 0.9 }
 }

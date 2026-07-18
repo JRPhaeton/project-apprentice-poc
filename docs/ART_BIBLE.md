@@ -11,6 +11,11 @@
   - **Tileset v2 is 256×128** (16×8 grid, 123 of 128 slots used; layout + `collide`/`anim` tile-property tables live in `tools/tileset_v2.py`): base terrains (grass ×3 variants incl. a feathered dark patch, dark-grass, mud, ruin-floor), five marching-squares transition sets (path↔grass, water↔grass, mud↔dark-grass full 16-mask; marsh-water↔mud, ruin-floor↔dark-grass minimal 12-mask), tree family (collide trunks on grass/dark bases, 16-mask scallop-cut canopy set + 3 one-tile hang fringes — both on the `overhead` layer rendered above the hero), wall/gate/ruin-wall/cliff top+face pairs (faces collide on the ground layer; prop-free tops are the overhead caps, plus cap-lip strips), sign ×3 bases, door, decor (rock, stump, bones, reeds, flowers, rubble, pebbles, ember-glow), and shadow-edge variants of every walkable base for cells south of walls/trees.
   - **Engine contract is property-driven**: `collide: true` on solids, `anim: 'water' | 'marshwater' | 'ember'` on shimmer cells — the engine never reads tile indices. `tile-anim.png` frame 0 of each pair is pixel-identical to the anim-tagged tileset tile.
   - Maps are regenerated ONLY via `tools/gen_maps.py` (topology-preserving compositor: collide grid + objects layer asserted equal to v1).
+- **M10 amendment ("The Vale Alive", per the approved M10 plan):**
+  - **Treasure chest is 16×16**, 2 frames (0 closed / 1 open) on a 32×16 sheet — manifest `chest`, anim `open` [1] @1 once; frame 0 is the closed default. Banded wooden chest; the ember-glint lock and open-mouth glow are sanctioned warm interaction glints (§2). Chest objects are non-colliding walk-over cells (sign-style interact), so walk routes are untouched.
+  - **Gate Keeper npc is 16×24** (hero proportions), 2-frame idle sway on a 32×48 sheet — top row only, bottom frame row transparent for the CI 16px grid — manifest `npc.keeper`, anim `idle` [0,1] @2 loop. Older robed figure in desaturated warm greys + bone beard; his lantern carries the warm ember dot (§2 names the Keeper's lantern a warm-accent element).
+  - **Emberheart is 32×32**, 2-frame flicker on a 64×32 sheet — manifest `fx.emberheart`, anim `burn` [0,1] @4 loop, for the Victory relight beat. Frame 0 is pixel-identical to the PWA icon key art (generator self-check).
+  - Maps still regenerate ONLY via `tools/gen_maps.py`; its assertion policy is amended exactly this far: collide grid still byte-equal to v1; all pre-M10 objects present verbatim IN ORDER as the layer prefix; the `tools/room_extras.py` extras (7 chests + the room1 Keeper npc) appended at the tail with fresh sequential ids; every extra-covered cell asserted walkable (non-collide ground) and non-overlapping with every pre-M10 object rect.
 - **Battle mobs: 64×64** (4×4 tiles) — Vale Spider, Marsh Wisp, Revenant.
 - **Boss: 96×96** (6×6 tiles) — Cloaked Chimera. No sprite/tileset frame may exceed 96×96 (asset-lint).
 - Internal resolution 256×224, camera shows 16×14 tiles. Compose battle layouts against that frame.
@@ -43,7 +48,7 @@ Per unit (battle sprites):
   - `uncloaked.idle` 2, `uncloaked.tell` 2 (Flame Breath is always telegraphed one full turn ahead), `uncloaked.attack` 3, `uncloaked.breath` 3
   - Cloak-off transition: v0 = group switch + screen flash; optional 2-frame `transition` group is an M3 decision. **Storyboard the cloak-off moment before art generation** (PLAN §5.3).
 - **Hero battle sprite (64×64):** `idle` 2, `defend` 2 (readable guard pose — Defend is the core verb, make it unmistakable), `attack` 3.
-- Overworld: hero (16×24, M8) 2-frame walk per facing; patrol minis (16×16) 2-frame idle bob.
+- Overworld: hero (16×24, M8) 2-frame walk per facing; patrol minis (16×16) 2-frame idle bob; Keeper npc (16×24, M10) 2-frame idle sway; chest (16×16, M10) closed/open pair; Emberheart fx (32×32, M10) 2-frame flicker.
 
 ## 4. UI Chrome (draft)
 

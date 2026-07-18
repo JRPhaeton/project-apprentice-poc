@@ -34,6 +34,11 @@ export class Preload extends Phaser.Scene {
         // lands from the Art lane; until then this is a silent no-op.
         queueSheet(this.load, art, 'tile.anim');
         queueSheet(this.load, art, 'enemy.minis'); // M8 patrol minis + shadow
+        // M10 overworld objects (Assets lane, manifest-gated no-ops until the
+        // entries land): treasure chest + the keeper NPC sheet the room-extras
+        // convention names. Other spriteIds degrade to placeholder rects.
+        queueSheet(this.load, art, 'chest');
+        queueSheet(this.load, art, 'npc.keeper');
     }
 
     create(): void {
@@ -41,6 +46,8 @@ export class Preload extends Phaser.Scene {
         registerAnims(this, art, 'hero.overworld');
         registerAnims(this, art, 'tile.anim');
         registerAnims(this, art, 'enemy.minis');
+        registerAnims(this, art, 'chest');
+        registerAnims(this, art, 'npc.keeper');
         // Debug ?scene=overworld&room=<id> (VITE_ENABLE_DEBUG only): the room
         // was seeded into the registry by bootstrap; skip Title and go there.
         if (readDebugOptions().jumpRoomId) {

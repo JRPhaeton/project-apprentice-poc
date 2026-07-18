@@ -1,9 +1,11 @@
 import Phaser from 'phaser';
 
-import { ensureTexture } from '../systems/anims';
-import { playMusic } from '../systems/audio';
+import { addAmbient } from '../systems/ambient';
+import { ensureTexture, registerAnims } from '../systems/anims';
+import { ensureAudio, playMusic } from '../systems/audio';
 import { autosave } from '../systems/autosave';
 import { makeBattleRequest } from '../systems/battle-request';
+import { Chests } from '../systems/chests';
 import { FieldMenu } from '../systems/field-menu';
 import { markHp, markRoom, markScene } from '../systems/hooks';
 import { getInputBus, type InputBus } from '../systems/input-bus';
@@ -64,6 +66,7 @@ export class Overworld extends Phaser.Scene {
     private bus!: InputBus;
     private busInteract = false;
     private fieldMenu!: FieldMenu;
+    private chests!: Chests;
     private keys!: {
         cursors: Phaser.Types.Input.Keyboard.CursorKeys;
         w: Phaser.Input.Keyboard.Key;
@@ -96,6 +99,11 @@ export class Overworld extends Phaser.Scene {
             }
         }
         this.addTileShimmer(); // M6: animated water/marsh/ember overlays
+        addAmbient(this, this.room, widthPx, heightPx); // M10 atmosphere pass
+        // M10 chests + NPCs (map objects land from the Assets lane; both
+        // arrays are simply empty until then).
+        this.chests = new Chests(this, this.room, this.mapData.chests, () => this.ui());
+        this.addNpcs();
 
         ensureTexture(this, HERO_KEY, 16, 16, 0x4060c0);
         this.heroHasFrames = this.textures.get(HERO_KEY).frameTotal > 4;
@@ -194,8 +202,12 @@ export class Overworld extends Phaser.Scene {
 
         // §6 audio routing: overworld theme, lazy-loaded on first need. A
         // repeated request for the playing track is a no-op (gapless across
-        // room switches and battle returns).
+        // room switches and battle returns). M10: the chest sfx rides the
+        // same lazy loader so the first open isn't silent (missing manifest
+        // entry/file degrades to silence as usual).
+        ensureAudio(this, ['sfx.chest']);
         playMusic(this, 'music.overworld');
+        this.load.start(); // no-op when playMusic already started it
 
         // M6 first-Overworld move hint, once per save ('hint.move' flag —
         // persisted by the autosave right below, like 'hint.defend').
@@ -238,6 +250,41 @@ export class Overworld extends Phaser.Scene {
             .rectangle(x, y, 12, 12, 0xc03030, 0.9)
             .setStrokeStyle(1, 0xff8080)
             .setDepth(5);
+    }
+
+    /**
+     * M10 NPCs: static sprite per NpcZone at the rect's bottom-center (feet
+     * on the rect bottom), idle anim from the manifest, blob shadow when the
+     * minis sheet is present. Non-colliding; interaction is the sign flow
+     * (checkSigns iterates signs + npcs). Missing sheet → placeholder rect
+     * texture via ensureTexture (§6), same as the hero.
+     */
+    private addNpcs(): void {
+        const art = this.reg.get('defs').art;
+        for (const npc of this.mapData.npcs) {
+            const x = npc.rect.centerX;
+            const y = npc.rect.bottom;
+            if (this.textures.exists(MINIS_KEY)) {
+                this.add.image(x, y - 2, MINIS_KEY, 6).setAlpha(0.4).setDepth(8);
+            }
+            const entry = art[npc.spriteId];
+            ensureTexture(
+                this,
+                npc.spriteId,
+                entry?.frameWidth ?? 16,
+                entry?.frameHeight ?? 24,
+                0x9a7a4a
+            );
+            registerAnims(this, art, npc.spriteId);
+            const sprite = this.add
+                .sprite(x, y, npc.spriteId, 0)
+                .setOrigin(0.5, 1)
+                .setDepth(9);
+            const idleKey = `${npc.spriteId}.idle`;
+            if (this.anims.exists(idleKey)) {
+                sprite.play(idleKey);
+            }
+        }
     }
 
     private addTileShimmer(): void {
@@ -311,7 +358,8 @@ export class Overworld extends Phaser.Scene {
             busPressed ||
             Phaser.Input.Keyboard.JustDown(this.keys.enter) || Phaser.Input.Keyboard.JustDown(this.keys.z);
         if (pressed && ui) {
-            if (!this.checkBossDoors(ui)) {
+            // Interact priority: boss door → chest → sign/NPC (M10).
+            if (!this.checkBossDoors(ui) && !this.chests.tryOpen(this.hero.x, this.hero.y)) {
                 this.checkSigns(ui);
             }
         }
@@ -475,8 +523,9 @@ export class Overworld extends Phaser.Scene {
         this.scene.start('Battle');
     }
 
+    /** Signs AND NPCs (M10): both are dialogueId + rect, same reach + flow. */
     private checkSigns(ui: UIOverlay): void {
-        for (const sign of this.mapData.signs) {
+        for (const sign of [...this.mapData.signs, ...this.mapData.npcs]) {
             const reach = Phaser.Geom.Rectangle.Inflate(Phaser.Geom.Rectangle.Clone(sign.rect), 6, 6);
             if (reach.contains(this.hero.x, this.hero.y)) {
                 const entry = this.reg.get('defs').dialogue[sign.dialogueId];

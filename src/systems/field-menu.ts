@@ -15,10 +15,10 @@ import { addPanel, addUiText } from './ui';
  * in the Overworld — ITEM / MAGIC / STATUS / CLOSE — reusing the battle
  * MenuList (keyboard + input-bus + tap rows + disabled-row styling). Field
  * usage applies effects DIRECTLY to the registry HeroState — the battle
- * resolver never runs here. Only 'heal' effects are field-usable; buff items/
- * spells show greyed (battle-only), as do heals at full HP (no waste). Every
- * use refreshes the HUD, toasts the healed amount, autosaves, and returns to
- * the menu root. While open the Overworld freezes the hero and swallows
+ * resolver never runs here. 'heal' effects are field-usable (never at full
+ * HP), and M10 'restoreMp' items likewise (never at full MP); buff items/
+ * spells show greyed (battle-only). Every use refreshes the HUD, toasts the
+ * restored amount, autosaves, and returns to the menu root. While open the Overworld freezes the hero and swallows
  * interacts; body dataset.pocMenu='field' is the QA observability hook (§10).
  *
  * Consume order (B/X while open backs out, never reopens): the open handlers
@@ -132,12 +132,14 @@ export class FieldMenu {
         });
     }
 
-    /** Every held stack shows; only heals are field-usable, and never at
-     *  full HP — everything else keeps the disabled-row styling. */
+    /** Every held stack shows; heals are field-usable below max HP, restoreMp
+     *  items (M10) below max MP — everything else keeps the disabled-row
+     *  styling (buffs battle-only, no waste at full HP/MP). */
     private openItems(): void {
         const defs = this.reg.get('defs');
         const hero = this.reg.get('hero');
         const fullHp = hero.stats.hp >= hero.stats.maxHp;
+        const fullMp = hero.stats.mp >= hero.stats.maxMp;
         this.sub.open({
             items: hero.inventory
                 .filter((s) => s.qty > 0)
@@ -146,7 +148,9 @@ export class FieldMenu {
                     return {
                         label: `${item?.name ?? s.itemId} x${s.qty}`,
                         value: s.itemId,
-                        enabled: item?.effect.kind === 'heal' && !fullHp
+                        enabled:
+                            (item?.effect.kind === 'heal' && !fullHp) ||
+                            (item?.effect.kind === 'restoreMp' && !fullMp)
                     };
                 }),
             onChoose: (itemId) => this.useItem(itemId),
@@ -178,18 +182,29 @@ export class FieldMenu {
     private useItem(itemId: string): void {
         const item = this.reg.get('defs').items[itemId];
         const hero = this.reg.get('hero');
-        if (item?.effect.kind !== 'heal') {
+        if (item?.effect.kind !== 'heal' && item?.effect.kind !== 'restoreMp') {
             return; // disabled rows can't confirm; belt and braces
         }
-        const healed = Math.min(item.effect.amount, hero.stats.maxHp - hero.stats.hp);
-        this.commitHeal(healed, {
-            ...hero,
-            stats: { ...hero.stats, hp: hero.stats.hp + healed },
-            // Save schema: stack qty stays positive — drop emptied stacks.
-            inventory: hero.inventory
-                .map((s) => (s.itemId === itemId ? { ...s, qty: s.qty - 1 } : { ...s }))
-                .filter((s) => s.qty > 0)
-        });
+        // Save schema: stack qty stays positive — drop emptied stacks.
+        const inventory = hero.inventory
+            .map((s) => (s.itemId === itemId ? { ...s, qty: s.qty - 1 } : { ...s }))
+            .filter((s) => s.qty > 0);
+        if (item.effect.kind === 'heal') {
+            const healed = Math.min(item.effect.amount, hero.stats.maxHp - hero.stats.hp);
+            this.commit(`+${healed} HP`, {
+                ...hero,
+                stats: { ...hero.stats, hp: hero.stats.hp + healed },
+                inventory
+            });
+        } else {
+            // M10 restoreMp (Mana Moss class): capped exactly like the heals.
+            const restored = Math.min(item.effect.amount, hero.stats.maxMp - hero.stats.mp);
+            this.commit(`+${restored} MP`, {
+                ...hero,
+                stats: { ...hero.stats, mp: hero.stats.mp + restored },
+                inventory
+            });
+        }
     }
 
     private castSpell(spellId: string): void {
@@ -199,18 +214,18 @@ export class FieldMenu {
             return;
         }
         const healed = Math.min(spell.effect.amount, hero.stats.maxHp - hero.stats.hp);
-        this.commitHeal(healed, {
+        this.commit(`+${healed} HP`, {
             ...hero,
             stats: { ...hero.stats, hp: hero.stats.hp + healed, mp: hero.stats.mp - spell.mpCost }
         });
     }
 
-    /** Field heal commit: registry, HUD (marks pocHp), toast, autosave, root. */
-    private commitHeal(healed: number, next: HeroState): void {
+    /** Field-use commit: registry, HUD (marks pocHp), toast, autosave, root. */
+    private commit(toastText: string, next: HeroState): void {
         this.reg.set('hero', next);
         const ui = this.opts.ui();
         ui?.setHeroHud(next.stats.hp, next.stats.maxHp, next.stats.mp, next.stats.maxMp);
-        ui?.toast(`+${healed} HP`);
+        ui?.toast(toastText);
         autosave(this.reg);
         this.openRoot();
     }

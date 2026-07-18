@@ -148,6 +148,33 @@ export function playVictoryFlash(scene: Phaser.Scene): void {
 }
 
 /**
+ * M10 Victory relight: one-shot ember burst — warm dots flung radially
+ * outward from (x, y), fading as they fly. Generated textures only.
+ */
+export function playEmberBurst(scene: Phaser.Scene, x: number, y: number): void {
+    ensureFxTextures(scene);
+    const tints = [0xffa040, 0xff7020, 0xffc060, 0xffe27a];
+    for (let i = 0; i < 16; i++) {
+        const angle = (Math.PI * 2 * i) / 16 + Phaser.Math.FloatBetween(-0.2, 0.2);
+        const dist = Phaser.Math.Between(28, 72);
+        const dot = scene.add
+            .image(x, y, EMBER_KEY)
+            .setDepth(40)
+            .setScrollFactor(0)
+            .setTint(tints[i % tints.length]);
+        scene.tweens.add({
+            targets: dot,
+            x: x + Math.cos(angle) * dist,
+            y: y + Math.sin(angle) * dist,
+            alpha: 0,
+            duration: Math.max(1, dur(Phaser.Math.Between(500, 850))),
+            ease: 'Quad.easeOut',
+            onComplete: () => dot.destroy()
+        });
+    }
+}
+
+/**
  * A drifting ember mote for the Intro: rises and fades on a randomized loop.
  * The alpha hits 0 at the top of each cycle, hiding the repeat snap-back.
  */
