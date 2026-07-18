@@ -83,6 +83,12 @@
         "frameHeight": 48,
         "anims": {}
     },
+    "ui.touch": {
+        "file": "assets/sprites/ui-touch.png",
+        "frameWidth": 32,
+        "frameHeight": 32,
+        "anims": {}
+    },
     "tile.anim": {
         "file": "assets/sprites/tile-anim.png",
         "frameWidth": 16,

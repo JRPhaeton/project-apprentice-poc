@@ -5,6 +5,7 @@ import { playMusic } from '../systems/audio';
 import { autosave } from '../systems/autosave';
 import { makeBattleRequest } from '../systems/battle-request';
 import { markHp, markRoom, markScene } from '../systems/hooks';
+import { getInputBus, type InputBus } from '../systems/input-bus';
 import {
     buildOverworldMap,
     TILE_SIZE,
@@ -42,6 +43,8 @@ export class Overworld extends Phaser.Scene {
     private heroHasFrames = false;
     private facing: Facing = 'down';
     private leaving = false;
+    private bus!: InputBus;
+    private busInteract = false;
     private keys!: {
         cursors: Phaser.Types.Input.Keyboard.CursorKeys;
         w: Phaser.Input.Keyboard.Key;
@@ -124,6 +127,18 @@ export class Overworld extends Phaser.Scene {
             enter: kb.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER, false),
             z: kb.addKey(Phaser.Input.Keyboard.KeyCodes.Z, false)
         };
+        // M7 input bus: 'confirm' (touch A) = interact, exactly like Enter/Z;
+        // movement OR-merges the bus's held virtual d-pad in move(). The
+        // scene restarts on every room switch, so unhook on SHUTDOWN.
+        this.bus = getInputBus(this.game);
+        this.busInteract = false;
+        const onBusConfirm = (): void => {
+            this.busInteract = true;
+        };
+        this.bus.on('confirm', onBusConfirm);
+        this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+            this.bus.off('confirm', onBusConfirm);
+        });
         new PauseController(this); // §8: P freezes tweens/timers/physics
 
         const hero = this.reg.get('hero');
@@ -183,6 +198,8 @@ export class Overworld extends Phaser.Scene {
     }
 
     update(): void {
+        const busPressed = this.busInteract; // consume even on early return
+        this.busInteract = false;
         if (isPaused() || this.leaving || !this.hero.body) {
             return;
         }
@@ -204,6 +221,7 @@ export class Overworld extends Phaser.Scene {
             return;
         }
         const pressed =
+            busPressed ||
             Phaser.Input.Keyboard.JustDown(this.keys.enter) || Phaser.Input.Keyboard.JustDown(this.keys.z);
         if (pressed && ui) {
             if (!this.checkBossDoors(ui)) {
@@ -228,13 +246,15 @@ export class Overworld extends Phaser.Scene {
         }
     }
 
-    /** 4-dir movement, no diagonals: horizontal input wins the axis. */
+    /** 4-dir movement, no diagonals: horizontal input wins the axis. The
+     *  touch d-pad's held state OR-merges with the keyboard each frame (M7). */
     private move(): void {
         const k = this.keys;
-        const left = k.cursors.left.isDown || k.a.isDown;
-        const right = k.cursors.right.isDown || k.d.isDown;
-        const up = k.cursors.up.isDown || k.w.isDown;
-        const down = k.cursors.down.isDown || k.s.isDown;
+        const bd = this.bus.getDir();
+        const left = k.cursors.left.isDown || k.a.isDown || bd.x < 0;
+        const right = k.cursors.right.isDown || k.d.isDown || bd.x > 0;
+        const up = k.cursors.up.isDown || k.w.isDown || bd.y < 0;
+        const down = k.cursors.down.isDown || k.s.isDown || bd.y > 0;
 
         let vx = 0;
         let vy = 0;

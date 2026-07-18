@@ -14,6 +14,7 @@ import type { GameDefs } from '../systems/content';
 import { runEnemyPhase } from '../systems/enemy-phase';
 import { backdropKeyFor, playBattleEntry, playVictoryFlash } from '../systems/fx';
 import { markOutcome, markScene } from '../systems/hooks';
+import { getInputBus } from '../systems/input-bus';
 import { dur, toggleSpeed } from '../systems/pacing';
 import { isPaused, PauseController } from '../systems/pause';
 import { getRegistry, type GameRegistry } from '../systems/registry';
@@ -30,6 +31,8 @@ export class Battle extends Phaser.Scene {
     private view!: BattleView;
     private menu!: MenuList;
     private submenu!: MenuList;
+    /** Enemy ids with a live tap-to-target handler (M7 touch targeting). */
+    private targetTapIds: string[] = [];
     private freeActionUsed = false;
     private ended = false;
     private backdropKey = '';
@@ -58,14 +61,18 @@ export class Battle extends Phaser.Scene {
         this.menu = new MenuList(this, 8, 108, 64);
         this.submenu = new MenuList(this, 76, 108, 116);
         const kb = this.input.keyboard;
+        const bus = getInputBus(this.game);
         const onSpeed = (): void => {
             if (!isPaused()) {
                 this.ui().toast(`SPEED ${toggleSpeed()}x`);
             }
         };
         kb?.on('keydown-T', onSpeed);
+        bus.on('speed', onSpeed); // M7 bus event, same handler as T
         this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
             kb?.off('keydown-T', onSpeed);
+            bus.off('speed', onSpeed);
+            this.targetTapIds = [];
             this.menu.destroy();
             this.submenu.destroy();
         });
@@ -199,11 +206,54 @@ export class Battle extends Phaser.Scene {
             cb(ids[0] ?? this.state.heroId);
             return;
         }
+        // Every path out of targeting (submenu choose/cancel, sprite tap)
+        // tears the M7 tap handlers down before continuing.
+        const done = (target: string): void => {
+            this.disableEnemyTaps();
+            cb(target);
+        };
         this.submenu.open({
             items: ids.map((id) => ({ label: this.state.combatants[id].name, value: id, enabled: true })),
-            onChoose: cb,
-            onCancel: () => this.playerTurn()
+            onChoose: done,
+            onCancel: () => {
+                this.disableEnemyTaps();
+                this.playerTurn();
+            }
         });
+        this.enableEnemyTaps(ids, (id) => {
+            this.submenu.close();
+            done(id);
+        });
+    }
+
+    /** M7 touch targeting: while the target submenu is open, tapping an
+     *  enemy sprite selects AND confirms it (bigger target than the rows). */
+    private enableEnemyTaps(ids: string[], choose: (id: string) => void): void {
+        this.targetTapIds = ids;
+        for (const id of ids) {
+            const sprite = this.view.enemies.get(id)?.sprite;
+            if (!sprite?.active) {
+                continue;
+            }
+            sprite.setInteractive({ useHandCursor: true });
+            sprite.on(Phaser.Input.Events.GAMEOBJECT_POINTER_UP, () => {
+                if (isPaused() || !this.targetTapIds.includes(id)) {
+                    return;
+                }
+                choose(id);
+            });
+        }
+    }
+
+    private disableEnemyTaps(): void {
+        for (const id of this.targetTapIds) {
+            const sprite = this.view.enemies.get(id)?.sprite;
+            if (sprite?.active) {
+                sprite.off(Phaser.Input.Events.GAMEOBJECT_POINTER_UP);
+                sprite.disableInteractive();
+            }
+        }
+        this.targetTapIds = [];
     }
 
     private openMagic(): void {

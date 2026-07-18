@@ -5,6 +5,7 @@ import { stopMusic } from '../systems/audio';
 import { MenuList } from '../systems/battle-menu';
 import { freshHero } from '../systems/content';
 import { markReady, markScene } from '../systems/hooks';
+import { getInputBus } from '../systems/input-bus';
 import { START_ROOM } from '../systems/overworld-map';
 import { getRegistry, type GameRegistry } from '../systems/registry';
 import { loadSave } from '../systems/storage';
@@ -43,7 +44,9 @@ export class Title extends Phaser.Scene {
             lineSpacing: 2
         }).setOrigin(0.5);
         addUiText(this, 128, 92, 'the stolen emberheart', { color: 0x606080 }).setOrigin(0.5);
-        const prompt = addUiText(this, 128, 112, 'PRESS ENTER', { color: 0xffff80 }).setOrigin(0.5);
+        // M7: touch devices read TAP TO START (tap anywhere = Enter below).
+        const promptText = this.sys.game.device.input.touch ? 'TAP TO START' : 'PRESS ENTER';
+        const prompt = addUiText(this, 128, 112, promptText, { color: 0xffff80 }).setOrigin(0.5);
         this.tweens.add({ targets: prompt, alpha: 0.25, yoyo: true, repeat: -1, duration: 600 });
 
         // §8 QoL / M6 controls clarity: full control set in a chrome panel.
@@ -71,9 +74,16 @@ export class Title extends Phaser.Scene {
         };
         kb?.on('keydown-ENTER', onEnter);
         kb?.on('keydown-Z', onEnter);
+        // M7: tap/click anywhere = Enter (menu row taps land on the MenuList
+        // zones first; the isOpen() guard above keeps this a no-op then).
+        this.input.on(Phaser.Input.Events.POINTER_UP, onEnter);
+        const bus = getInputBus(this.game);
+        bus.on('confirm', onEnter);
         this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
             kb?.off('keydown-ENTER', onEnter);
             kb?.off('keydown-Z', onEnter);
+            this.input.off(Phaser.Input.Events.POINTER_UP, onEnter);
+            bus.off('confirm', onEnter);
             this.menu?.destroy();
             this.menu = null;
         });

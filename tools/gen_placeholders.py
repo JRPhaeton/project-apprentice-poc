@@ -22,9 +22,18 @@ Outputs (all self-authored, CC0 — see assets/CREDITS.md):
       0,1 water / 2,3 marsh-water / 4,5 ember-glow shimmer pairs; frames
       0/2/4 are pixel-identical to tileset tiles 3/9/15 (overlay blending)
   public/assets/sprites/ui-panel.png         48x48  SNES 9-slice window
+  public/assets/sprites/ui-touch.png        160x32   5 frames 32x32 (M7)
+      0 D-pad base, 1 pressed-arm overlay (UP; engine rotates), 2 'A'
+      button, 3 'B' button, 4 pause — ui-panel chrome family
   public/assets/sprites/backdrops/{forest,marsh,ruin,lair}.png  256x144
   public/assets/fonts/font.png              128x48  8x8 bitmap font
   public/assets/fonts/font.fnt              BMFont XML (Phaser-compatible)
+  public/assets/icons/icon-192.png          192x192 PWA icon (M7)
+  public/assets/icons/icon-512.png          512x512 PWA icon
+  public/assets/icons/icon-maskable-512.png 512x512 maskable (safe-zone art)
+  public/apple-touch-icon.png               180x180 — at public/ ROOT: 180 is
+      not 16-divisible and CI's source-asset-lint grid-checks every PNG
+      under public/assets/, so the apple icon must live outside assets/
 
 Palette discipline (ART_BIBLE §2): the tileset draws from one <=32-color
 master pool with <=16 colors per 16x16 tile; every sprite sheet, backdrop
@@ -37,8 +46,10 @@ Exit code is non-zero if any self-check fails.
 """
 
 import json
+import math
 import os
 import sys
+from collections import deque
 
 from PIL import Image, ImageDraw
 
@@ -53,6 +64,13 @@ TILESETS = os.path.join(PUB, "assets", "tilesets")
 SPRITES = os.path.join(PUB, "assets", "sprites")
 BACKDROPS_DIR = os.path.join(SPRITES, "backdrops")
 FONTS = os.path.join(PUB, "assets", "fonts")
+ICONS_DIR = os.path.join(PUB, "assets", "icons")
+ICON_192 = os.path.join(ICONS_DIR, "icon-192.png")
+ICON_512 = os.path.join(ICONS_DIR, "icon-512.png")
+ICON_MASKABLE = os.path.join(ICONS_DIR, "icon-maskable-512.png")
+# 180x180 is NOT 16-divisible; CI's source-asset-lint grid-checks every PNG
+# under public/assets/, so the apple icon must live at public/ root instead.
+APPLE_ICON = os.path.join(PUB, "apple-touch-icon.png")
 ART_MANIFEST = os.path.join(ROOT, "src", "data", "art-manifest.json")
 
 OUTLINE = (20, 22, 40, 255)  # near-black blue: shared outline + tile "void"
@@ -1453,6 +1471,204 @@ def gen_ui_panel():
 
 
 # ---------------------------------------------------------------------------
+# 4b. Touch controls (M7) — 160x32, five 32x32 frames:
+#   0 D-pad base (beveled chrome cross, ui-panel family, center dimple)
+#   1 pressed-arm overlay: the UP arm re-lit with bright bevel + ember tint;
+#     same cross geometry as frame 0, so the engine rotates this one frame
+#     for the other three directions and it lands pixel-exact.
+#   2 'A' button (chrome disc, ember accent ring, EmberSpark glyph)
+#   3 'B' button (same disc, cooler violet accent)
+#   4 pause (small chrome square, '||' glyph)
+#   Whole sheet <= 16 colors; faces are solid fills so the controls stay
+#   readable at 1x over game art.
+
+TOUCH_EMBER = {
+    "dk": (168, 64, 24, 255),
+    "mid": (232, 120, 40, 255),
+    "lt": (248, 200, 88, 255),
+}
+TOUCH_FACE = (16, 14, 40, 255)  # opaque navy face (solid at 1x, unlike fill)
+
+CROSS_ARM = (10, 21)  # arm thickness span — centered on 15.5
+CROSS_END = (2, 29)   # arm reach span
+GRAD_RAMP = ("grad_top", "grad_hi2", "grad_mid", "grad_lo2", "grad_bot")
+
+
+def _cross_hit(x, y):
+    (a0, a1), (e0, e1) = CROSS_ARM, CROSS_END
+    return (a0 <= x <= a1 and e0 <= y <= e1) or (a0 <= y <= a1 and e0 <= x <= e1)
+
+
+def _cross_depth():
+    """BFS ring depth inside the cross (0 = the dark outline ring)."""
+    d = {}
+    q = deque()
+    for y in range(32):
+        for x in range(32):
+            if not _cross_hit(x, y):
+                continue
+            if any(not _cross_hit(x + dx, y + dy) for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))):
+                d[(x, y)] = 0
+                q.append((x, y))
+    while q:
+        x, y = q.popleft()
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            n = (x + dx, y + dy)
+            if n not in d and _cross_hit(*n):
+                d[n] = d[(x, y)] + 1
+                q.append(n)
+    return d
+
+
+def _dpad_arrow(px, facing, color):
+    """3-row molded arrow near an arm tip, pointing outward."""
+    for row, (a, b) in enumerate(((15, 16), (14, 17), (13, 18))):
+        for k in range(a, b + 1):
+            if facing == "up":
+                px[k, 4 + row] = color
+            elif facing == "down":
+                px[k, 27 - row] = color
+            elif facing == "left":
+                px[4 + row, k] = color
+            else:
+                px[27 - row, k] = color
+
+
+def touch_dpad_base():
+    t = new_img(32, 32)
+    px = t.load()
+    P = UI_PAL
+    for (x, y), d in _cross_depth().items():
+        if d == 0:
+            c = P["edge"]
+        elif d == 1:
+            if not _cross_hit(x, y - 2) or not _cross_hit(x - 2, y):
+                c = P["bevel_hi"]  # lit top/left flank
+            else:
+                c = P["bevel_lo"]  # shaded flank + concave elbows
+        else:
+            c = P[GRAD_RAMP[min(4, (y - 2) * 5 // 28)]]
+        px[x, y] = c
+    # subtle concave center dimple: dark upper rim, light catch below
+    for y in range(12, 20):
+        for x in range(12, 20):
+            r = math.hypot(x - 15.5, y - 15.5)
+            if r <= 3.4:
+                if r > 2.3:
+                    px[x, y] = P["inner"] if y < 16 else P["bevel_lo"]
+                else:
+                    px[x, y] = P["grad_lo2"]
+    for f in ("up", "down", "left", "right"):
+        _dpad_arrow(px, f, P["inner"])
+    return t
+
+
+def touch_dpad_pressed():
+    """Overlay frame: only the UP arm, brightened + ember-warm."""
+    t = new_img(32, 32)
+    px = t.load()
+    P = UI_PAL
+    E = TOUCH_EMBER
+    for (x, y), d in _cross_depth().items():
+        if not (CROSS_ARM[0] <= x <= CROSS_ARM[1] and y <= 13):
+            continue
+        if d == 0:
+            c = P["edge"]
+        elif d == 1:
+            c = P["bevel_hi"]  # bright bevel all the way around
+        elif y <= 4:
+            c = E["lt"]
+        elif y <= 10:
+            c = E["mid"]
+        else:
+            c = E["dk"]  # warm fade toward the cross center
+        px[x, y] = c
+    _dpad_arrow(px, "up", E["dk"])
+    return t
+
+
+def _stamp_glyph(px, ch, x0, y0, color, shadow):
+    """Bold (double-struck) EmberSpark glyph with a 1px drop shadow."""
+    rows = pixelfont.G[ch]
+    for ox, oy, c in ((1, 1, shadow), (2, 1, shadow), (0, 0, color), (1, 0, color)):
+        for gy, row in enumerate(rows):
+            for gx, bit in enumerate(row):
+                if bit == "X":
+                    px[x0 + gx + ox, y0 + gy + oy] = c
+
+
+def touch_button(accent, glyph):
+    """Round chrome button: dark edge, accent ring, bevel, navy face."""
+    t = new_img(32, 32)
+    px = t.load()
+    P = UI_PAL
+    a_lt, a_mid, a_dk = accent
+    for y in range(32):
+        for x in range(32):
+            r = math.hypot(x - 15.5, y - 15.5)
+            if r > 13.6:
+                continue
+            if r > 12.3:
+                c = P["edge"]
+            elif r > 10.8:  # accent ring, lit upper-left
+                c = a_lt if x + y < 27 else (a_dk if x + y > 36 else a_mid)
+            elif r > 9.6:
+                c = P["bevel_hi"] if x + y < 31 else P["bevel_lo"]
+            elif r > 8.6:
+                c = P["inner"]
+            else:
+                c = TOUCH_FACE
+            px[x, y] = c
+    dither(px, 9, 9, 22, 13, P["grad_lo2"], 3, only=TOUCH_FACE)  # face sheen
+    px[7, 7] = P["bevel_hi"]  # specular glint on the accent ring
+    px[8, 7] = P["bevel_hi"]
+    _stamp_glyph(px, glyph, 13, 12, P["bevel_hi"], P["edge"])
+    return t
+
+
+def touch_pause():
+    t = new_img(32, 32)
+    px = t.load()
+    P = UI_PAL
+    s0, s1 = 6, 25
+    for y in range(s0, s1 + 1):
+        for x in range(s0, s1 + 1):
+            if x in (s0, s1) and y in (s0, s1):
+                continue  # rounded corners
+            d = min(x - s0, s1 - x, y - s0, s1 - y)
+            if d == 0:
+                c = P["edge"]
+            elif d == 1:
+                c = P["bevel_hi"] if (y == s0 + 1 or x == s0 + 1) else P["bevel_lo"]
+            elif d == 2:
+                c = P[GRAD_RAMP[min(4, (y - s0 - 2) * 5 // (s1 - s0 - 3))]]
+            elif d == 3:
+                c = P["inner"]
+            else:
+                c = TOUCH_FACE
+            px[x, y] = c
+    for bx in (13, 17):  # '||' glyph: two lit bars with shaded right edges
+        for yy in range(12, 20):
+            px[bx, yy] = P["bevel_hi"]
+            px[bx + 1, yy] = P["bevel_lo"]
+    return t
+
+
+def gen_ui_touch():
+    img = new_img(160, 32)
+    frames = (
+        touch_dpad_base(),
+        touch_dpad_pressed(),
+        touch_button((TOUCH_EMBER["lt"], TOUCH_EMBER["mid"], TOUCH_EMBER["dk"]), "A"),
+        touch_button((UI_PAL["bevel_lo"], UI_PAL["grad_top"], UI_PAL["grad_lo2"]), "B"),
+        touch_pause(),
+    )
+    for i, f in enumerate(frames):
+        img.paste(f, (i * 32, 0))
+    return img
+
+
+# ---------------------------------------------------------------------------
 # 5. Tile shimmer overlay — 96x16, 6 frames 16x16. Frames 0/2/4 are pixel-
 #    identical to tileset tiles 3/9/15 (phase 0); frames 1/3/5 are the
 #    alternate shimmer phases. The Overworld scene swaps overlay frames on a
@@ -1466,6 +1682,185 @@ def gen_tile_anim():
     ):
         img.paste(tile, (i * 16, 0))
     return img
+
+
+# ---------------------------------------------------------------------------
+# 6. PWA icons (M7) — the EMBERHEART: a pixel ember/flame heart (warm
+#    oranges/golds) over a near-black blue-violet dusk. Key art is drawn once
+#    at a 32x32 base and nearest-neighbour upscaled, so every icon reads as
+#    intentional chunky pixels, never blur. The maskable icon redraws the art
+#    at shrink 0.85 so every art pixel sits inside the W3C safe zone (the
+#    centered circle of radius 40% of the icon edge) over a full-bleed
+#    background; a self-check below measures that exactly.
+#
+#    apple-touch-icon.png is 180x180 — NOT divisible by 16 — and CI's
+#    source-asset-lint grid-checks every PNG under public/assets/, so the
+#    apple icon lives at public/ ROOT, outside assets/ (the 16-divisible
+#    192/512 icons live in public/assets/icons/).
+
+ICON_PAL = {
+    "bg": (16, 13, 36, 255),        # near-black blue-violet dusk
+    "bg_dk": (10, 8, 26, 255),      # corner vignette
+    "violet": (38, 30, 74, 255),    # upper dusk haze
+    "star": (150, 150, 198, 255),   # lavender dusk stars (panel bevel_lo)
+    "deep": (120, 42, 26, 255),     # dark rust: heart rim, warm bg haze
+    "ember_dk": (168, 64, 24, 255),
+    "ember": (232, 120, 40, 255),
+    "ember_lt": (248, 200, 88, 255),
+    "white": (255, 244, 214, 255),  # hottest core
+}
+
+MASKABLE_SHRINK = 0.85
+
+
+def _heart_hit(x, y, s):
+    """Emberheart silhouette: two lobe circles + a cone tangent to them
+    meeting at the bottom point. Design units relative to the canvas
+    center (15.5, 15.5), scaled by `s`."""
+    X = (x - 15.5) / s
+    Y = (y - 15.5) / s
+    for lx in (-6.0, 6.0):
+        if (X - lx) ** 2 + (Y + 0.5) ** 2 <= 49.0:
+            return True
+    if Y > 12.5 or Y < -0.5:
+        return False
+    if Y >= 5.165:  # below the tangency: straight taper to the point
+        return abs(X) <= 1.3786 * (12.5 - Y)
+    # between the lobes: fill up to the lobes' outer envelope
+    return abs(X) <= 6.0 + math.sqrt(max(0.0, 49.0 - (Y + 0.5) ** 2))
+
+
+def _flame_depth(x, y, s):
+    """> 0 inside a flame lick; magnitude = design-px distance to its edge.
+    A wobbling main tongue rising from the notch plus two side licks."""
+    X = (x - 15.5) / s
+    Y = (y - 15.5) / s
+    best = 0.0
+    if -13.5 <= Y <= -4.0:
+        k = (Y + 13.5) / 9.5
+        wob = (0.15, 0.9, -0.6)[int(-Y) % 3]
+        best = max(best, 0.6 + 3.1 * k - abs(X - wob * (1 - k)))
+    if -9.5 <= Y <= -5.0:
+        best = max(best, 0.4 + 1.4 * (Y + 9.5) / 4.5 - abs(X + 5.2))
+    if -10.5 <= Y <= -5.5:
+        best = max(best, 0.4 + 1.3 * (Y + 10.5) / 5.0 - abs(X - 4.9))
+    return best
+
+
+def emberheart_art(s=1.0):
+    """32x32 key art on transparency: flame licks behind, shaded heart in
+    front (5-color ember ramp), molten notch core, drifting sparks."""
+    t = new_img(32, 32)
+    px = t.load()
+    P = ICON_PAL
+    heart = [[_heart_hit(x, y, s) for x in range(32)] for y in range(32)]
+    for y in range(32):
+        for x in range(32):
+            if heart[y][x]:
+                continue
+            m = _flame_depth(x, y, s)
+            if m <= 0:
+                continue
+            Y = (y - 15.5) / s
+            if Y <= -12.3:
+                c = P["ember_lt"]  # bright tip
+            elif m > 2.3:
+                c = P["white"]
+            elif m > 1.2:
+                c = P["ember_lt"]
+            else:
+                c = P["ember"]
+            px[x, y] = c
+    for y in range(32):
+        for x in range(32):
+            if not heart[y][x]:
+                continue
+            X = (x - 15.5) / s
+            Y = (y - 15.5) / s
+            c = P["ember"]
+            # vertical ramp: mid orange crown -> dark ember -> rust tip
+            if Y > 4.0 and BAYER4[y & 3][x & 3] < min(16, int((Y - 4.0) * 4)):
+                c = P["ember_dk"]
+            if Y > 8.0:
+                c = P["ember_dk"]
+            if Y > 10.0 and BAYER4[(y + 1) & 3][x & 3] < min(16, int((Y - 10.0) * 5)):
+                c = P["deep"]
+            # right-side form shadow
+            if X > 7.5 and -2.0 <= Y <= 4.0 and BAYER4[y & 3][(x + 2) & 3] < 6:
+                c = P["ember_dk"]
+            # upper-left lobe highlight + hot glint, right lobe counter-sheen
+            if ((X + 6.3) / 3.6) ** 2 + ((Y + 3.8) / 2.8) ** 2 <= 1.0:
+                c = P["ember_lt"]
+            if ((X + 7.2) / 1.5) ** 2 + ((Y + 4.6) / 1.2) ** 2 <= 1.0:
+                c = P["white"]
+            if ((X - 5.6) / 2.1) ** 2 + ((Y + 4.2) / 1.6) ** 2 <= 1.0 and BAYER4[y & 3][x & 3] < 8:
+                c = P["ember_lt"]
+            # molten core where the flame meets the notch
+            if abs(X) + abs(Y + 1.2) * 1.3 <= 3.4:
+                c = P["ember_lt"]
+            if abs(X) + abs(Y + 1.2) * 1.3 <= 1.7:
+                c = P["white"]
+            # dark rust rim on the silhouette
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                nx, ny = x + dx, y + dy
+                if not (0 <= nx < 32 and 0 <= ny < 32) or not heart[ny][nx]:
+                    c = P["deep"]
+                    break
+            px[x, y] = c
+    # drifting sparks (design offsets scale with the art)
+    for dx_, dy_, key in (
+        (-11.5, -6.0, "ember_lt"), (10.2, -7.6, "white"), (13.0, 1.5, "ember"),
+        (-12.8, 3.5, "ember"), (7.6, -10.6, "ember_lt"),
+    ):
+        sx = int(round(15.5 + dx_ * s))
+        sy = int(round(15.5 + dy_ * s))
+        if 0 <= sx < 32 and 0 <= sy < 32 and px[sx, sy][3] == 0:
+            px[sx, sy] = P[key]
+    return t
+
+
+def icon_bg(n):
+    """Full-bleed n x n dusk background: violet upper haze, warm ember pool
+    behind the heart's lower half, corner vignette, lavender stars."""
+    t = new_img(n, n, ICON_PAL["bg"])
+    px = t.load()
+    P = ICON_PAL
+    third = n // 3
+    dither(px, 0, 0, n - 1, third, P["violet"], 2)
+    dither(px, 0, third + 1, n - 1, 2 * third, P["violet"], 1, oy=1)
+    c = (n - 1) / 2
+    for y in range(n):
+        for x in range(n):
+            if px[x, y] == P["bg"] and (x - c) ** 2 + (y - 0.62 * n) ** 2 <= (0.36 * n) ** 2 \
+                    and BAYER4[y & 3][x & 3] < 2:
+                px[x, y] = P["deep"]
+            if (x - c) ** 2 + (y - c) ** 2 >= (0.66 * n) ** 2 and BAYER4[(y + 2) & 3][x & 3] < 3:
+                px[x, y] = P["bg_dk"]
+    for fx, fy in ((0.16, 0.14), (0.8, 0.09), (0.9, 0.33), (0.07, 0.45), (0.68, 0.2)):
+        px[int(fx * n), int(fy * n)] = P["star"]
+    return t
+
+
+def _nn(img, size):
+    return img.resize((size, size), Image.NEAREST)
+
+
+def gen_icon_192():
+    return _nn(Image.alpha_composite(icon_bg(32), emberheart_art()), 192)
+
+
+def gen_icon_512():
+    return _nn(Image.alpha_composite(icon_bg(32), emberheart_art()), 512)
+
+
+def gen_icon_maskable():
+    return _nn(Image.alpha_composite(icon_bg(32), emberheart_art(MASKABLE_SHRINK)), 512)
+
+
+def gen_apple_icon():
+    base = icon_bg(36)  # 36x36 base -> exact 5x nearest-neighbour to 180
+    base.alpha_composite(emberheart_art(), (2, 2))
+    return _nn(base, 180)
 
 
 # ---------------------------------------------------------------------------
@@ -1492,7 +1887,7 @@ H96_EXEMPT = ("backdrops",)
 REQUIRED_MANIFEST_IDS = (
     "enemy.spider", "enemy.wisp", "enemy.revenant", "enemy.chimera",
     "hero.overworld", "backdrop.forest", "backdrop.marsh", "backdrop.ruin",
-    "backdrop.lair", "ui.panel", "tile.anim",
+    "backdrop.lair", "ui.panel", "ui.touch", "tile.anim",
 )
 
 
@@ -1539,6 +1934,37 @@ def self_check(generated):
         check(alt != a, f"tile-anim frames {frame}/{frame + 1} are identical (no shimmer)")
     print("  ok tile-anim.png  frames 0/2/4 match tileset tiles 3/9/15, pairs animate")
 
+    # ui-touch: 5 frames; the base cross must rotate cleanly and the pressed
+    # overlay must land pixel-exact on it (the engine rotates frame 1)
+    touch = Image.open(os.path.join(SPRITES, "ui-touch.png"))
+    check(touch.size == (160, 32), f"ui-touch.png: {touch.size} != (160, 32)")
+    tf = [touch.crop((i * 32, 0, i * 32 + 32, 32)) for i in range(5)]
+    for i, f in enumerate(tf):
+        check(f.getchannel("A").getextrema()[1] > 0, f"ui-touch frame {i} is empty")
+        for j in range(i + 1, 5):
+            check(f.tobytes() != tf[j].tobytes(), f"ui-touch frames {i}/{j} identical")
+    m0 = tf[0].getchannel("A").point(lambda v: 255 if v else 0)
+    check(
+        m0.tobytes() == m0.transpose(Image.ROTATE_90).tobytes(),
+        "ui-touch D-pad silhouette is not 4-fold rotation symmetric",
+    )
+    a0 = tf[0].getchannel("A").tobytes()
+    a1 = tf[1].getchannel("A").tobytes()
+    for i in range(32 * 32):
+        if a1[i]:
+            x, y = i % 32, i // 32
+            check(a0[i] != 0, f"ui-touch overlay pixel ({x},{y}) outside the D-pad base")
+            check(
+                CROSS_ARM[0] <= x <= CROSS_ARM[1] and y <= 13,
+                f"ui-touch overlay pixel ({x},{y}) not confined to the UP arm",
+            )
+    m1 = tf[1].getchannel("A")
+    check(
+        m1.tobytes() == m1.transpose(Image.FLIP_LEFT_RIGHT).tobytes(),
+        "ui-touch overlay silhouette is not mirror-symmetric",
+    )
+    print("  ok ui-touch.png  5 frames; overlay aligned to base, silhouette rotation-safe")
+
     # bitmap font: .fnt parses, chars 32-126 all present and in-bounds
     font_png = Image.open(os.path.join(FONTS, "font.png"))
     with open(os.path.join(FONTS, "font.fnt"), encoding="utf-8") as f:
@@ -1565,11 +1991,53 @@ def self_check(generated):
     print("All self-checks passed.")
 
 
+def self_check_icons():
+    dims = {
+        ICON_192: (192, 192),
+        ICON_512: (512, 512),
+        ICON_MASKABLE: (512, 512),
+        APPLE_ICON: (180, 180),
+    }
+    for path, want in dims.items():
+        img = Image.open(path).convert("RGBA")
+        rel = os.path.relpath(path, ROOT)
+        check(img.size == want, f"{path}: {img.size} != {want}")
+        n = len(unique_colors(img))
+        check(n <= 16, f"{path}: {n} unique colors (> 16)")
+        check(img.getchannel("A").getextrema()[0] == 255, f"{path}: not fully opaque")
+        print(f"  ok {rel}  {want[0]}x{want[1]}  {n} colors, opaque")
+    # the apple icon (180 is not 16-divisible) must sit OUTSIDE public/assets,
+    # or CI's source-asset-lint PNG grid rule would fail the build
+    check(
+        os.path.dirname(APPLE_ICON) == PUB,
+        "apple-touch-icon.png must live at public/ root, outside assets/",
+    )
+    # maskable safe zone: every key-art pixel block (diff vs the pure
+    # background) stays inside the centered circle of radius 40% of the edge
+    mask_img = Image.open(ICON_MASKABLE).convert("RGBA").load()
+    bg = _nn(icon_bg(32), 512).load()
+    safe_r = 0.4 * 512
+    worst = 0.0
+    for y in range(512):
+        for x in range(512):
+            if mask_img[x, y] != bg[x, y]:
+                dx = max(abs(x - 256.0), abs(x + 1.0 - 256.0))
+                dy = max(abs(y - 256.0), abs(y + 1.0 - 256.0))
+                worst = max(worst, math.hypot(dx, dy))
+    check(worst > 0.0, "maskable icon has no key art at all")
+    check(
+        worst <= safe_r,
+        f"maskable key art reaches {worst:.1f}px from center (safe zone {safe_r:.1f}px)",
+    )
+    print(f"  ok maskable safe zone: key art within {worst:.1f}px of center (limit {safe_r:.1f}px)")
+    print("All icon self-checks passed.")
+
+
 # ---------------------------------------------------------------------------
 
 
 def main():
-    for dirpath in (TILESETS, SPRITES, BACKDROPS_DIR, FONTS):
+    for dirpath in (TILESETS, SPRITES, BACKDROPS_DIR, FONTS, ICONS_DIR):
         os.makedirs(dirpath, exist_ok=True)
     outputs = {
         os.path.join(TILESETS, "overworld.png"): gen_tileset,
@@ -1580,6 +2048,7 @@ def main():
         os.path.join(SPRITES, "chimera.png"): gen_chimera,
         os.path.join(SPRITES, "tile-anim.png"): gen_tile_anim,
         os.path.join(SPRITES, "ui-panel.png"): gen_ui_panel,
+        os.path.join(SPRITES, "ui-touch.png"): gen_ui_touch,
         os.path.join(FONTS, "font.png"): pixelfont.build_font_png,
     }
     for name, fn in gen_backdrops.BACKDROPS.items():
@@ -1587,11 +2056,21 @@ def main():
     for path, gen in outputs.items():
         gen().save(path)
         print(f"wrote {os.path.relpath(path, ROOT)}")
+    icon_outputs = {
+        ICON_192: gen_icon_192,
+        ICON_512: gen_icon_512,
+        ICON_MASKABLE: gen_icon_maskable,
+        APPLE_ICON: gen_apple_icon,
+    }
+    for path, gen in icon_outputs.items():
+        gen().save(path)
+        print(f"wrote {os.path.relpath(path, ROOT)}")
     fnt_path = os.path.join(FONTS, "font.fnt")
     with open(fnt_path, "w", encoding="utf-8", newline="\n") as f:
         f.write(pixelfont.build_fnt_xml())
     print(f"wrote {os.path.relpath(fnt_path, ROOT)}")
     self_check(list(outputs.keys()))
+    self_check_icons()
 
 
 if __name__ == "__main__":

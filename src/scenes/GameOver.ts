@@ -27,9 +27,12 @@ export class GameOver extends Phaser.Scene {
         };
         kb?.once('keydown-ENTER', toTitle);
         kb?.once('keydown-Z', toTitle);
+        // M7 touch: a tap (or click) anywhere advances too.
+        this.input.once(Phaser.Input.Events.POINTER_UP, toTitle);
         this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
             kb?.off('keydown-ENTER', toTitle);
             kb?.off('keydown-Z', toTitle);
+            this.input.off(Phaser.Input.Events.POINTER_UP, toTitle);
         });
     }
 }

@@ -1,9 +1,11 @@
 import Phaser from 'phaser';
 
 import { markHp } from '../systems/hooks';
+import { getInputBus, type InputBus } from '../systems/input-bus';
 import { dur } from '../systems/pacing';
 import { isPaused } from '../systems/pause';
 import { savingDisabled } from '../systems/storage';
+import { createTouchControls, isTouchDevice } from '../systems/touch';
 import { addPanel, addUiText, moreMarkerChar, type UiPanel, type UiText } from '../systems/ui';
 
 /**
@@ -11,7 +13,11 @@ import { addPanel, addUiText, moreMarkerChar, type UiPanel, type UiText } from '
  * notice, §11) on a chrome backing strip, the shared bottom dialogue/battle-
  * log box (2-line, advance on Enter/Z, §8 hold-to-fast-forward) in a chrome
  * panel, and toasts. Runs above Overworld/Battle. All text renders through
- * the M6 UI kit (bitmap font with monospace fallback).
+ * the M6 UI kit (bitmap font with monospace fallback). M7: hosts the touch
+ * controls (touch devices only) and advances open dialogues on bus 'confirm'
+ * (A button) or a tap anywhere on screen — a full-screen tap zone BELOW the
+ * touch buttons, interactive only while a dialogue is open, so it never eats
+ * d-pad/button presses or taps meant for other scenes.
  */
 export class UIOverlay extends Phaser.Scene {
     private hudText!: UiText;
@@ -19,6 +25,9 @@ export class UIOverlay extends Phaser.Scene {
     private boxText!: UiText;
     private moreMarker!: UiText;
     private keys!: { enter: Phaser.Input.Keyboard.Key; z: Phaser.Input.Keyboard.Key };
+    private bus!: InputBus;
+    private tapZone!: Phaser.GameObjects.Zone;
+    private busAdvance = false;
 
     private logLines: string[] = [];
     private boxPinned = false;
@@ -58,6 +67,35 @@ export class UIOverlay extends Phaser.Scene {
             enter: kb!.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER, false),
             z: kb!.addKey(Phaser.Input.Keyboard.KeyCodes.Z, false)
         };
+
+        // M7: bus 'confirm' (touch A) advances an open dialogue like Enter/Z.
+        this.busAdvance = false;
+        this.bus = getInputBus(this.game);
+        const onBusConfirm = (): void => {
+            if (this.dialogueOpen && !isPaused()) {
+                this.busAdvance = true;
+            }
+        };
+        this.bus.on('confirm', onBusConfirm);
+        this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+            this.bus.off('confirm', onBusConfirm);
+        });
+
+        // M7 tap-to-advance: full screen, below the touch buttons (topOnly
+        // input gives the buttons precedence), enabled only while a dialogue
+        // is open. Mouse clicks ride the same path for free.
+        this.tapZone = this.add.zone(128, 112, 256, 224).setDepth(150).setInteractive();
+        this.tapZone.on(Phaser.Input.Events.GAMEOBJECT_POINTER_UP, () => {
+            if (this.dialogueOpen && !isPaused()) {
+                this.busAdvance = true;
+            }
+        });
+        this.tapZone.disableInteractive();
+
+        // M7 touch UI (d-pad/A/B/pause/fullscreen) on touch devices only.
+        if (isTouchDevice(this)) {
+            createTouchControls(this);
+        }
     }
 
     get dialogueOpen(): boolean {
@@ -108,6 +146,7 @@ export class UIOverlay extends Phaser.Scene {
             this.setBoxVisible(true);
             this.boxText.setText('');
             this.moreMarker.setVisible(false);
+            this.tapZone.setInteractive(); // M7: tap anywhere advances
         });
     }
 
@@ -126,14 +165,17 @@ export class UIOverlay extends Phaser.Scene {
     }
 
     update(_time: number, delta: number): void {
+        const busAdvance = this.busAdvance; // consume even on early return
+        this.busAdvance = false;
         if (isPaused() || !this.onDialogueDone) {
             return; // §8: the typewriter freezes with everything else
         }
         const page = this.pages[this.pageIndex];
-        const held = this.keys.enter.isDown || this.keys.z.isDown;
+        // Held touch A fast-forwards exactly like a held Enter/Z (M7).
+        const held = this.keys.enter.isDown || this.keys.z.isDown || this.bus.isConfirmHeld();
         const pressedEnter = Phaser.Input.Keyboard.JustDown(this.keys.enter);
         const pressedZ = Phaser.Input.Keyboard.JustDown(this.keys.z);
-        let justPressed = pressedEnter || pressedZ;
+        let justPressed = pressedEnter || pressedZ || busAdvance;
         if (this.swallowPress) {
             // The keypress that opened the dialogue must not also advance it.
             this.swallowPress = false;
@@ -168,6 +210,7 @@ export class UIOverlay extends Phaser.Scene {
             if (this.pageIndex >= this.pages.length) {
                 const done = this.onDialogueDone;
                 this.onDialogueDone = null;
+                this.tapZone.disableInteractive(); // M7: stop eating taps
                 this.moreMarker.setVisible(false);
                 if (this.boxPinned) {
                     this.boxText.setText(this.logLines.join('\n'));

@@ -8,6 +8,7 @@
  *   - body[data-poc-room]         current room id, updated on every room switch
  *   - body[data-poc-music]        music key ONLY while actually audibly playing;
  *                                 absent when stopped, locked, or files missing
+ *   - body[data-poc-touch]        "1" while the touch UI is active (M7)
  */
 
 export type SceneHookKey = 'Title' | 'Intro' | 'Overworld' | 'Battle' | 'GameOver' | 'Victory';
@@ -30,6 +31,15 @@ export function markOutcome(outcome: 'victory' | 'defeat' | 'fled'): void {
 
 export function markRoom(room: string): void {
     document.body.dataset.pocRoom = room;
+}
+
+/** Set while the touch UI exists (UIOverlay up on a touch device, M7). */
+export function markTouch(active: boolean): void {
+    if (active) {
+        document.body.dataset.pocTouch = '1';
+    } else {
+        delete document.body.dataset.pocTouch;
+    }
 }
 
 /** Set ONLY when a track is really playing (post-unlock, load succeeded). */

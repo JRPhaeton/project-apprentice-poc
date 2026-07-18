@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 
+import { getInputBus } from './input-bus';
 import { addUiText, type UiText } from './ui';
 
 /**
@@ -9,7 +10,9 @@ import { addUiText, type UiText } from './ui';
  * PAUSED overlay with the full control set (M6 controls clarity). Scene
  * update() loops and menu key handlers consult isPaused() so gameplay input
  * is dead while frozen; the P key itself stays live because the host scene
- * is never scene.pause()d.
+ * is never scene.pause()d. M7: the input bus 'pause' event (touch pause
+ * button) rides the same toggle — it stays live while frozen for the same
+ * reason.
  */
 
 let paused = false;
@@ -27,10 +30,13 @@ export class PauseController {
     constructor(scene: Phaser.Scene) {
         this.scene = scene;
         const kb = scene.input.keyboard;
+        const bus = getInputBus(scene.game);
         const onP = (): void => this.setPaused(!paused);
         kb?.on('keydown-P', onP);
+        bus.on('pause', onP);
         scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
             kb?.off('keydown-P', onP);
+            bus.off('pause', onP);
             if (paused) {
                 this.setPaused(false); // never leak a frozen global state
             }

@@ -13,9 +13,12 @@ import { addUiText, moreMarkerChar, type UiText } from '../systems/ui';
  * A black scene with drifting ember motes and the cloaked Chimera looming as
  * a dark-tinted silhouette while it delivers its four-page typewriter taunt.
  * Enter/Z advances a page (or completes the current one); X/Esc skips the
- * whole intro at any point, including mid-load. CONTINUE and debug jumps
- * never enter this scene. Plays the one-shot 'music.sting' (silent-safe like
- * all audio); the sting stops on exit. All pacing routes through dur().
+ * whole intro at any point, including mid-load. M7 touch: a tap anywhere
+ * advances (same grace window as Enter) and a SKIP target bottom-right — X
+ * has no touch equivalent — skips, active even mid-load like the X key.
+ * CONTINUE and debug jumps never enter this scene. Plays the one-shot
+ * 'music.sting' (silent-safe like all audio); the sting stops on exit. All
+ * pacing routes through dur().
  */
 
 const TAUNT_PAGES = [
@@ -33,6 +36,7 @@ export class Intro extends Phaser.Scene {
     private charTimer = 0;
     private built = false;
     private leaving = false;
+    private tapAdvance = false;
     /** Ignore advance presses briefly so the Title's Enter can't bleed in. */
     private graceUntil = 0;
     private text: UiText | null = null;
@@ -55,9 +59,21 @@ export class Intro extends Phaser.Scene {
         this.charTimer = 0;
         this.built = false;
         this.leaving = false;
+        this.tapAdvance = false;
         this.text = null;
         this.marker = null;
         this.graceUntil = this.time.now + dur(250);
+
+        // M7 touch: tap anywhere advances; the bottom-right SKIP zone (56×28,
+        // over the 'X SKIP' label) skips the whole intro, even mid-load.
+        this.input.on(Phaser.Input.Events.POINTER_UP, () => {
+            this.tapAdvance = true;
+        });
+        this.add
+            .zone(256, 224, 56, 28)
+            .setOrigin(1, 1)
+            .setInteractive({ useHandCursor: true })
+            .on(Phaser.Input.Events.GAMEOBJECT_POINTER_UP, () => this.exitIntro());
 
         const kb = this.input.keyboard!;
         this.keys = {
@@ -134,11 +150,14 @@ export class Intro extends Phaser.Scene {
             .setDepth(5)
             .setVisible(false);
         this.tweens.add({ targets: this.marker, alpha: 0.3, yoyo: true, repeat: -1, duration: 400 });
-        addUiText(this, 252, 216, 'X SKIP', { color: 0x484860 }).setOrigin(1, 0.5).setDepth(5);
+        const skipLabel = this.sys.game.device.input.touch ? 'SKIP' : 'X SKIP';
+        addUiText(this, 252, 216, skipLabel, { color: 0x484860 }).setOrigin(1, 0.5).setDepth(5);
         this.built = true;
     }
 
     update(_time: number, delta: number): void {
+        const tapped = this.tapAdvance; // consume even on early return
+        this.tapAdvance = false;
         if (this.leaving) {
             return;
         }
@@ -154,6 +173,7 @@ export class Intro extends Phaser.Scene {
             return;
         }
         let advance =
+            tapped ||
             Phaser.Input.Keyboard.JustDown(this.keys.enter) ||
             Phaser.Input.Keyboard.JustDown(this.keys.z);
         if (advance && this.time.now < this.graceUntil) {

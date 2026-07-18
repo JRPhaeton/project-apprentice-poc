@@ -18,6 +18,8 @@ A browser-native, SNES-style turn-based RPG proof of concept — one hero, three
 | P | Pause |
 | T | Battle speed (1×/2×, animation time only) |
 
+**On a phone:** touch-native — virtual D-pad + A/B buttons appear automatically, menus and enemies are tappable, tap anywhere advances dialogue. Rotate to landscape. **Install it:** open the play link in your mobile browser → *Add to Home Screen* — installs as an app (fullscreen, offline, whole game precached).
+
 Battle commands: **ATTACK · DEFEND · MAGIC · ITEM · RUN**. Defend halves damage this turn **and** powers up your next attack — watch for enemy tells (the spider steps forward before its big bite), defend through the hit, strike back.
 
 ## Status: POC complete (M0–M5)

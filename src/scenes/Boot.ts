@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 
 import { bootGame } from '../systems/bootstrap';
+import { queueTouchAssets } from '../systems/touch';
 import { queueUiAssets } from '../systems/ui';
 
 export class Boot extends Phaser.Scene {
@@ -18,6 +19,9 @@ export class Boot extends Phaser.Scene {
         // flow and ?scene=battle debug jumps render with them; missing files
         // degrade to the previous monospace/rect path inside the UI kit.
         queueUiAssets(this.load);
+        // M7: the touch-button sheet rides the same tiny Boot batch; missing
+        // manifest entry/file degrades to generated-graphics buttons.
+        queueTouchAssets(this.load);
     }
 
     create(): void {
