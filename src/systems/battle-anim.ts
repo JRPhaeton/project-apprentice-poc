@@ -185,6 +185,13 @@ function playEvent(view: BattleView, e: BattleEvent): number {
         case 'mpSpent':
             refreshHud(view);
             return 0;
+        case 'mpRestored': {
+            // M10: Mana Moss class — green popup + HUD refresh.
+            ui.log(`${name(view, e.target)} recovers ${e.amount} MP.`);
+            popup(scene, 128, 150, `+${e.amount} MP`, 0x80d0ff);
+            refreshHud(view);
+            return 350;
+        }
         case 'itemUsed': {
             const item = view.defs.items[e.itemId];
             ui.log(`${name(view, e.actor)} uses ${item?.name ?? e.itemId}${e.free ? ' (free)' : ''}.`);

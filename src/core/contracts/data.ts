@@ -17,7 +17,9 @@ export const effectSchema = z.discriminatedUnion('kind', [
         pct: z.number().int(),
         turns: z.number().int().positive()
     }),
-    z.object({ kind: z.literal('attack'), mult: z.number().positive() })
+    z.object({ kind: z.literal('attack'), mult: z.number().positive() }),
+    // M10 amendment (GDD row 9): MP restoration for the Mana Moss item class.
+    z.object({ kind: z.literal('restoreMp'), amount: z.number().int().positive() })
 ]);
 
 // ---------------------------------------------------------------------------

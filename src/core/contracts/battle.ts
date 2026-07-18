@@ -97,6 +97,7 @@ export type BattleEvent =
     | { type: 'damage'; source: CombatantId; target: CombatantId; amount: number; kind: 'attack' | 'spell' }
     | { type: 'heal'; source: CombatantId; target: CombatantId; amount: number }
     | { type: 'mpSpent'; actor: CombatantId; amount: number }
+    | { type: 'mpRestored'; target: CombatantId; amount: number }
     | { type: 'itemUsed'; actor: CombatantId; itemId: string; free: boolean }
     | { type: 'buffApplied'; target: CombatantId; stat: Stat; pct: number; turns: number }
     | { type: 'buffExpired'; target: CombatantId; stat: Stat }

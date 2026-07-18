@@ -3,18 +3,38 @@
         "id": "herb",
         "name": "Herb",
         "freeAction": false,
-        "effect": { "kind": "heal", "amount": 12 }
+        "effect": {
+            "kind": "heal",
+            "amount": 12
+        }
     },
     "emberDraught": {
         "id": "emberDraught",
         "name": "Ember Draught",
         "freeAction": false,
-        "effect": { "kind": "heal", "amount": 30 }
+        "effect": {
+            "kind": "heal",
+            "amount": 30
+        }
+    },
+    "manaMoss": {
+        "id": "manaMoss",
+        "name": "Mana Moss",
+        "freeAction": false,
+        "effect": {
+            "kind": "restoreMp",
+            "amount": 6
+        }
     },
     "powerBottle": {
         "id": "powerBottle",
         "name": "Power Bottle",
         "freeAction": true,
-        "effect": { "kind": "buff", "stat": "atk", "pct": 50, "turns": 3 }
+        "effect": {
+            "kind": "buff",
+            "stat": "atk",
+            "pct": 50,
+            "turns": 3
+        }
     }
 }

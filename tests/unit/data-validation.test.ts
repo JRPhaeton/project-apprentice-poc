@@ -52,6 +52,13 @@ describe('malformed fixtures are rejected', () => {
         expect(enemiesFileSchema.safeParse(bad).success).toBe(false);
     });
 
+    it('restoreMp effect with a non-positive amount is rejected (M10)', () => {
+        const bad = {
+            moss: { id: 'moss', name: 'Moss', freeAction: false, effect: { kind: 'restoreMp', amount: 0 } }
+        };
+        expect(itemsFileSchema.safeParse(bad).success).toBe(false);
+    });
+
     it('spell with negative mp cost', () => {
         const bad = { heal: { id: 'heal', name: 'Heal', mpCost: -1, effect: { kind: 'heal', amount: 5 } } };
         expect(spellsFileSchema.safeParse(bad).success).toBe(false);

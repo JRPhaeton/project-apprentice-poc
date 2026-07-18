@@ -234,7 +234,11 @@ function applyEffect(
     rng: Rng,
     actor: Combatant,
     target: Combatant,
-    effect: { kind: 'heal'; amount: number } | { kind: 'buff'; stat: Stat; pct: number; turns: number } | { kind: 'attack'; mult: number },
+    effect:
+        | { kind: 'heal'; amount: number }
+        | { kind: 'buff'; stat: Stat; pct: number; turns: number }
+        | { kind: 'attack'; mult: number }
+        | { kind: 'restoreMp'; amount: number },
     source: string,
     events: BattleEvent[]
 ): void {
@@ -251,6 +255,13 @@ function applyEffect(
         }
         case 'attack': {
             dealDamage(rng, actor, target, effect.mult, 'spell', events);
+            break;
+        }
+        case 'restoreMp': {
+            // M10 amendment: MP restore, capped at maxMp.
+            const restored = Math.min(effect.amount, target.stats.maxMp - target.stats.mp);
+            target.stats.mp += restored;
+            events.push({ type: 'mpRestored', target: target.id, amount: restored });
             break;
         }
     }

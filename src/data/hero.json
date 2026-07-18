@@ -5,10 +5,26 @@
     "atk": 8,
     "def": 5,
     "spd": 6,
-    "spells": ["heal", "power"],
+    "spells": [
+        "heal",
+        "power"
+    ],
     "inventory": [
-        { "itemId": "herb", "qty": 4 },
-        { "itemId": "emberDraught", "qty": 1 },
-        { "itemId": "powerBottle", "qty": 1 }
+        {
+            "itemId": "herb",
+            "qty": 4
+        },
+        {
+            "itemId": "emberDraught",
+            "qty": 1
+        },
+        {
+            "itemId": "manaMoss",
+            "qty": 1
+        },
+        {
+            "itemId": "powerBottle",
+            "qty": 1
+        }
     ]
 }

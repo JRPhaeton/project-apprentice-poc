@@ -325,6 +325,34 @@ describe('Boss phase change (§5.3)', () => {
     });
 });
 
+describe('restoreMp (M10 amendment)', () => {
+    it('restores MP capped at maxMp and emits mpRestored', () => {
+        const state = createBattle('enc-spider', hero, 1, { enemies, encounters });
+        const heroC = state.combatants['hero'];
+        heroC.stats.mp = 2;
+        state.inventory.push({ itemId: 'manaMoss', qty: 2 });
+
+        const first = resolveAction(
+            state,
+            { type: 'useItem', actor: 'hero', itemId: 'manaMoss', target: 'hero' },
+            seq(0.5),
+            defs
+        );
+        expect(first.events.find((e) => e.type === 'mpRestored')).toMatchObject({ amount: 6 });
+        expect(heroC.stats.mp).toBe(8);
+
+        // Second moss: only 2 MP of headroom — capped.
+        const second = resolveAction(
+            state,
+            { type: 'useItem', actor: 'hero', itemId: 'manaMoss', target: 'hero' },
+            seq(0.5),
+            defs
+        );
+        expect(second.events.find((e) => e.type === 'mpRestored')).toMatchObject({ amount: 2 });
+        expect(heroC.stats.mp).toBe(10);
+    });
+});
+
 describe('items (§5.2)', () => {
     it('herb heals, capped at maxHp, and decrements the stack', () => {
         const state = createBattle('enc-spider', hero, 1, { enemies, encounters });
