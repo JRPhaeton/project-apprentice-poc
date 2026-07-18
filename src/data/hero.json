@@ -7,7 +7,8 @@
     "spd": 6,
     "spells": ["heal", "power"],
     "inventory": [
-        { "itemId": "herb", "qty": 2 },
+        { "itemId": "herb", "qty": 4 },
+        { "itemId": "emberDraught", "qty": 1 },
         { "itemId": "powerBottle", "qty": 1 }
     ]
 }

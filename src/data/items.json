@@ -5,6 +5,12 @@
         "freeAction": false,
         "effect": { "kind": "heal", "amount": 12 }
     },
+    "emberDraught": {
+        "id": "emberDraught",
+        "name": "Ember Draught",
+        "freeAction": false,
+        "effect": { "kind": "heal", "amount": 30 }
+    },
     "powerBottle": {
         "id": "powerBottle",
         "name": "Power Bottle",
